@@ -1,0 +1,15 @@
+{
+  "name": "line-tra-commute-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LINE 去程／回程通勤查詢機器人，使用 TDX 台鐵 v3 API",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test",
+    "copy:check": "node scripts/copy-check.mjs"
+  }
+}

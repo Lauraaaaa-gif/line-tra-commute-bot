@@ -1,0 +1,11 @@
+.env
+.env.*
+.git
+.vscode
+.runtime
+ngrok.local.yml
+test
+fixtures
+scripts
+*.log
+*.code-workspace
