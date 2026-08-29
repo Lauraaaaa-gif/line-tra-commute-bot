@@ -1,7 +1,7 @@
 import { arrivalText, errorText, helpText, parseAcknowledgement, parseCommand, textMessage, timetableText, tripVariables } from './messages.mjs';
 import { SelectionStore, parseSelection, parseArrivalPostback } from './selections.mjs';
 import { JourneyChoices, parseTripAction } from './journeys.mjs';
-import { copyBook } from './copy.mjs';
+import { staticCopyBook } from './copy-core.mjs';
 import { safeError, ServiceError } from './errors.mjs';
 
 // 小型單一行程版本：同時處理中的事件共用 Promise，成功後保留 24h。
@@ -32,9 +32,24 @@ export class EventDeduplicator {
     this.entries.set(id, entry);
     return entry.promise;
   }
+
+  snapshot() {
+    const now = this.clock();
+    return { version: 1, entries: [...this.entries].filter(([, entry]) => entry.done && entry.expiresAt > now)
+      .slice(-this.maxEntries).map(([id, entry]) => [id, entry.expiresAt]) };
+  }
+
+  restore(value) {
+    if (!value || value.version !== 1 || !Array.isArray(value.entries)) return false;
+    const now = this.clock();
+    this.entries = new Map(value.entries.filter(x => Array.isArray(x) && x.length === 2 && typeof x[0] === 'string'
+      && Number.isFinite(x[1]) && x[1] > now).slice(-this.maxEntries)
+      .map(([id, expiresAt]) => [id, { done: true, expiresAt, promise: Promise.resolve() }]));
+    return true;
+  }
 }
 
-export function createBot({ config, trainService, lineClient, logger = console, dedupe = new EventDeduplicator(), selections = new SelectionStore(), realtime, copy = copyBook, journeys: injectedJourneys }) {
+export function createBot({ config, trainService, lineClient, logger = console, dedupe = new EventDeduplicator(), selections = new SelectionStore(), realtime, copy = staticCopyBook, journeys: injectedJourneys }) {
   let active = 0;
   const journeys = injectedJourneys || new JourneyChoices({ selections, realtime });
   const queues = new Map();

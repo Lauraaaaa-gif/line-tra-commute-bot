@@ -62,6 +62,30 @@ export class SelectionStore {
     }
     return { entry, train: entry.result.trains[selection.index - 1] };
   }
+
+  snapshot() {
+    this.prune(new Date(this.clock()));
+    return {
+      version: 1,
+      salt: this.salt.toString('base64'),
+      entries: [...this.entries],
+      latest: [...this.latest],
+    };
+  }
+
+  restore(value) {
+    if (!value || value.version !== 1 || typeof value.salt !== 'string' || !Array.isArray(value.entries) || !Array.isArray(value.latest)) return false;
+    const salt = Buffer.from(value.salt, 'base64');
+    if (salt.length !== 32) return false;
+    const entries = new Map(value.entries.filter(x => Array.isArray(x) && x.length === 2 && typeof x[0] === 'string'
+      && x[1] && Number.isFinite(x[1].expiresAt) && x[1].expiresAt > this.clock()).slice(-this.maxEntries));
+    const latest = new Map(value.latest.filter(x => Array.isArray(x) && x.length === 2 && typeof x[0] === 'string'
+      && typeof x[1] === 'string' && entries.has(x[1])));
+    this.salt = salt;
+    this.entries = entries;
+    this.latest = latest;
+    return true;
+  }
 }
 
 export function parseSelection(text) {

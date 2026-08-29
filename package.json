@@ -4,12 +4,20 @@
   "private": true,
   "description": "LINE 去程／回程通勤查詢機器人，使用 TDX 台鐵 v3 API",
   "type": "module",
-  "engines": {
-    "node": ">=24.0.0"
-  },
+  "engines": { "node": ">=24.0.0" },
   "scripts": {
     "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
     "test": "node --test",
-    "copy:check": "node scripts/copy-check.mjs"
+    "demo": "node scripts/demo.mjs",
+    "query": "node scripts/query.mjs",
+    "copy:check": "node scripts/copy-check.mjs",
+    "share": "node scripts/share.mjs --confirm-public-webhook",
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy",
+    "tail:worker": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "4.127.1"
   }
 }

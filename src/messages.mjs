@@ -1,4 +1,4 @@
-import { copyBook } from './copy.mjs';
+import { staticCopyBook } from './copy-core.mjs';
 import { taipeiTime } from './trains.mjs';
 import { scheduledView, trainTimes } from './realtime.mjs';
 
@@ -12,11 +12,11 @@ export function parseAcknowledgement(data) {
   return data === 'ack:v1';
 }
 
-export function helpText(routes, copy = copyBook) {
+export function helpText(routes, copy = staticCopyBook) {
   return copy.text('help', { outboundFrom: routes.去程.from, outboundTo: routes.去程.to, returnFrom: routes.回程.from, returnTo: routes.回程.to });
 }
 
-export function timetableText(result, instant = new Date(`${result.date}T${result.time}:00+08:00`), copy = copyBook) {
+export function timetableText(result, instant = new Date(`${result.date}T${result.time}:00+08:00`), copy = staticCopyBook) {
   const current = taipeiTime(instant);
   const numbers = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
   const lines = [copy.text('header', result), '', copy.text('listTitle')];
@@ -36,12 +36,12 @@ export function timetableText(result, instant = new Date(`${result.date}T${resul
   return lines.join('\n');
 }
 
-export function errorText(error, copy = copyBook) {
+export function errorText(error, copy = staticCopyBook) {
   return copy.text(['STATION_NOT_FOUND', 'SAME_STATION'].includes(error.code) ? 'stationError'
     : error.status === 429 ? 'rateLimit' : 'lookupError');
 }
 
-export function tripVariables(result, train, view, instant, copy = copyBook) {
+export function tripVariables(result, train, view, instant, copy = staticCopyBook) {
   const eta = taipeiTime(new Date(view.etaAt));
   const data = { ...result, ...train, ...taipeiTime(instant),
     date: result.date, arrivalDate: taipeiTime(new Date(view.arrivalAt)).date,
@@ -55,12 +55,12 @@ export function tripVariables(result, train, view, instant, copy = copyBook) {
   return data;
 }
 
-export function arrivalText(result, train, instant = new Date(`${result.date}T${result.time || '00:00'}:00+08:00`), view = scheduledView(result, train), copy = copyBook) {
+export function arrivalText(result, train, instant = new Date(`${result.date}T${result.time || '00:00'}:00+08:00`), view = scheduledView(result, train), copy = staticCopyBook) {
   return copy.text('arrival', tripVariables(result, train, view, instant, copy));
 }
 
 const postback = (label, data) => ({ type: 'action', action: { type: 'postback', label, data, displayText: label } });
-export function textMessage(text, entry = null, { trip = null, acknowledge = false, bare = false, emphasizeLastLine = false, copy = copyBook } = {}) {
+export function textMessage(text, entry = null, { trip = null, acknowledge = false, bare = false, emphasizeLastLine = false, copy = staticCopyBook } = {}) {
   let buttons = entry ? entry.result.trains.map((_, i) => postback(String(i + 1), `arrival:${entry.id}:${i + 1}`)) : [];
   if (trip) buttons = [
     postback(copy.text('buttonBoarded'), `trip:board:${trip.id}`),

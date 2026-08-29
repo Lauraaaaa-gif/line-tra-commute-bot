@@ -5,6 +5,7 @@ import { LineClient } from './line.mjs';
 import { createBot } from './bot.mjs';
 import { createApp } from './app.mjs';
 import { RealtimeService } from './realtime.mjs';
+import { copyBook } from './copy.mjs';
 
 try {
   loadLocalEnv();
@@ -12,7 +13,7 @@ try {
   const tdx = new TdxClient({ clientId: config.tdxClientId, clientSecret: config.tdxClientSecret, cacheMs: config.timetableCacheMs });
   const trainService = new TrainService(tdx, config);
   const lineClient = new LineClient({ accessToken: config.lineAccessToken, timeoutMs: config.lineTimeoutMs });
-  const bot = createBot({ config, trainService, lineClient, realtime: new RealtimeService(tdx) });
+  const bot = createBot({ config, trainService, lineClient, realtime: new RealtimeService(tdx), copy: copyBook });
   const server = createApp({ secret: config.lineSecret, bot });
   server.on('error', error => {
     console.error(error.code === 'EADDRINUSE' ? '啟動失敗：PORT 已被其他程式使用。' : `啟動失敗：${error.code || 'SERVER_ERROR'}`);

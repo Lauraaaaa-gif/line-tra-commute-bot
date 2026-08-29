@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "line-tra-commute-bot",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-08-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [
+      { "name": "BOT_STATE", "class_name": "BotState" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["BotState"] }
+  ],
+  "vars": {
+    "OUTBOUND_FROM": "大湖",
+    "OUTBOUND_TO": "新左營",
+    "RETURN_FROM": "新左營",
+    "RETURN_TO": "大湖",
+    "RESULT_LIMIT": "3",
+    "MIN_LEAD_MINUTES": "0",
+    "TRAIN_TYPE_CODES": "",
+    "TIMETABLE_CACHE_SECONDS": "60",
+    "TDX_QUERY_TIMEOUT_MS": "8000",
+    "LINE_REPLY_TIMEOUT_MS": "4000"
+  }
+}

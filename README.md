@@ -164,6 +164,18 @@ Verify 通過只驗證 Webhook 收件與簽章，不會驗證 TDX，也不會真
 
 ### 長期部署
 
+目前建議使用 Cloudflare Workers，入口為 `src/worker.mjs`，聊天室短期狀態由 Durable Object 保存。部署設定在 `wrangler.jsonc`，詳細步驟請看 `雲端部署說明.md`。LINE、TDX 與群組管理者 User ID 必須設定為 Cloudflare Secrets，不能寫入 Git 或 `wrangler.jsonc`。
+
+Cloudflare Workers 部署指令：
+
+```powershell
+npm install
+npm test
+npm run deploy:worker
+```
+
+以下為傳統 Node.js／Render 備用部署方式：
+
 可放到支援長駐 Node.js 的主機；設定四項 API 環境變數、`HOST=0.0.0.0`、平台指定的 `PORT`，啟動指令為 `node src/server.mjs`。由平台或反向代理處理 HTTPS，健康檢查路徑設 `/health`。若要限制群組控制權，另設 `GROUP_CONTROLLER_USER_ID`；未設定時群組控制全部停用，私人聊天室不受影響。
 
 不要將 `.env` 加入部署映像檔。Docker 範例：
@@ -229,11 +241,11 @@ API 串接依據為 [TDX 官方軌道 v3 Swagger](https://tdx.transportdata.tw/a
 - **即時資訊**：列表取自表訂時刻；選車或查下一班時，接近乘車時間才讀取一次 TDX TrainLiveBoard（同車次短暫快取）。預估抵達＝表訂到達＋目前誤點，不是官方 ETA 預測；無可用資料時用表訂。之後不會自動更新或通知。未串接票價、訂票、座位及月台。
 - **失敗**：TDX timeout／錯誤會回覆提示，不會假裝查無班次或改用示範資料。LINE 回覆失敗則 Webhook 回非 2xx，啟用 redelivery 後 LINE 可重送。
 - **安全**：`x-line-signature` 使用 Channel secret 對原始 body 做 HMAC-SHA256，再以固定時間比較；先驗章再解析 JSON。不記錄使用者 ID、訊息全文、replyToken 或金鑰。見 [LINE 驗章規範](https://developers.line.biz/en/docs/messaging-api/verify-webhook-signature/)。
-- **單一實例**：去重在記憶體保留 24 小時、最多 10,000 事件，重啟後會清空。多人多實例部署要改成 Redis／資料庫的共享原子去重；不保證跨重啟 exactly-once。
-- **班次選擇**：最多快取 1,000 份已成功回覆的列表，有效 30 分鐘，換日失效，存取時清理過期項目。使用者與聊天室以每次啟動重新產生密鑰的 HMAC 摘要隔離，不將身分或列表寫入磁碟。多實例部署需另用共享儲存。到達時間取自目的站 ArrivalTime；跨日顯示次日日期，並非即時誤點預測。
+- **事件去重**：傳統 Node.js 版本在記憶體保留 24 小時、最多 10,000 事件；Cloudflare Workers 版本則將摘要狀態保存於各聊天室的 Durable Object。
+- **班次選擇**：列表有效 30 分鐘且換日失效。傳統 Node.js 版本暫存在單一程序記憶體；Workers 版本由 Durable Object 持久保存，並以隨機 HMAC 鹽值隔離使用者與聊天室。到達時間取自目的站 ArrivalTime；跨日顯示次日日期，並非即時誤點預測。
 - **處理模式**：查詢與回覆完成才回 HTTP 200，最多同時處理 8 個事件；同一使用者／聊天室依序處理。沒有背景排程、推播或持久化佇列。
 - **選擇與隱私**：選車只保留 30 分鐘，使用者識別以每次啟動重新產生密鑰的 HMAC 摘要隔離。沒有 Push 收件者，也不將使用者識別碼、訊息或金鑰寫入日誌。
-- **費用與可靠性**：不呼叫 LINE Push、不自動購買額度或升級方案。TDX 查詢仍使用 API 用量。本機後端、網路或 ngrok 中斷就無法查詢；電腦關機可用需要另行部署雲端，尚未完成。
+- **費用與可靠性**：不呼叫 LINE Push、不自動購買額度或升級方案。TDX 查詢仍使用 API 用量。Cloudflare Workers 部署完成並切換 Webhook 後，電腦關機仍可使用；部署前保留 Render 作為回復入口。
 
 ## 檔案導覽
 

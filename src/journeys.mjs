@@ -38,5 +38,15 @@ export class JourneyChoices {
     if (trip) this.choices.delete(trip.owner);
     return trip;
   }
+  snapshot() {
+    this.pruneChoices();
+    return { version: 1, choices: [...this.choices] };
+  }
+  restore(value) {
+    if (!value || value.version !== 1 || !Array.isArray(value.choices)) return false;
+    this.choices = new Map(value.choices.filter(x => Array.isArray(x) && x.length === 2 && typeof x[0] === 'string'
+      && x[1] && Number.isFinite(x[1].expiresAt) && x[1].expiresAt > this.clock()).slice(-1000));
+    return true;
+  }
   close() { this.choices.clear(); }
 }
