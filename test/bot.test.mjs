@@ -9,6 +9,7 @@ import { SelectionStore, parseSelection } from '../src/selections.mjs';
 const config = readConfig({}, { requireLine: false, requireTdx: false });
 const now = new Date('2026-08-28T17:42:00+08:00');
 const event = (id, text = '回程') => ({ webhookEventId: id, replyToken: `reply-${id}`, type: 'message', message: { type: 'text', text }, source: { type: 'user', userId: 'test-user' } });
+const replyText = reply => reply.message.altText ?? reply.message.text;
 
 function makeBot(overrides = {}) {
   const replies = [];
@@ -47,8 +48,8 @@ test('LINE 回覆失敗不標記成功，下次重送可重試', async () => {
 test('TDX 錯誤回覆可理解的提示，不洩漏 exception', async () => {
   const { bot, replies } = makeBot({ trainService: { async lookup() { throw new Error('private-secret'); } } });
   await bot.handleEvents([event('1')], now);
-  assert.match(replies[0].message.text, /目前無法取得/);
-  assert.doesNotMatch(replies[0].message.text, /private-secret/);
+  assert.match(replyText(replies[0]), /目前無法取得/);
+  assert.doesNotMatch(replyText(replies[0]), /private-secret/);
 });
 
 test('未知文字、follow、群組閒聊與非文字全部忽略；只回完整說明指令', async () => {
@@ -117,7 +118,7 @@ test('數字與按鈕顯示目的站到達時間，不增加 TDX 查詢；舊按
   assert.equal(firstButton.type, 'postback');
   assert.deepEqual(replies[0].message.quickReply.items.slice(-2).map(x => x.action.label), ['去程', '回程']);
   await bot.handleEvents([event('choose', '１')], now);
-  assert.match(replies.at(-1).message.text, /【抵達大湖時間約 18:08】/);
+  assert.match(replyText(replies.at(-1)), /【抵達大湖時間約 18:08】/);
   assert.equal(lookups(), 1);
   await bot.handleEvents([event('other', '去程')], now);
   const beforeUnknown = replies.length;
@@ -125,24 +126,24 @@ test('數字與按鈕顯示目的站到達時間，不增加 TDX 查詢；舊按
   assert.equal(replies.length, beforeUnknown);
   const old = postback('old-button', firstButton.data);
   await bot.handleEvents([old], now);
-  assert.match(replies.at(-1).message.text, /新左營 → 大湖\n已選擇區間車 1\n/);
+  assert.match(replyText(replies.at(-1)), /新左營 → 大湖\n已選擇區間車 1\n/);
   const count = replies.length;
   await bot.handleEvents([old], now);
   assert.equal(replies.length, count);
   await bot.handleEvents([event('latest', '2')], now);
-  assert.match(replies.at(-1).message.text, /大湖 → 新左營/);
-  assert.match(replies.at(-1).message.text, /18:22/);
+  assert.match(replyText(replies.at(-1)), /大湖 → 新左營/);
+  assert.match(replyText(replies.at(-1)), /18:22/);
   assert.equal(lookups(), 2);
 });
 
 test('未查詢、超出範圍、無效按鈕都安全提示', async () => {
   const { bot, replies } = selectable();
   await bot.handleEvents([event('missing', '1')], now);
-  assert.match(replies.at(-1).message.text, /重新查詢/);
+  assert.match(replyText(replies.at(-1)), /重新查詢/);
   await bot.handleEvents([event('list')], now);
   for (const text of ['3', '10']) {
     await bot.handleEvents([event(text, text)], now);
-    assert.match(replies.at(-1).message.text, /請選擇 1～2/);
+    assert.match(replyText(replies.at(-1)), /請選擇 1～2/);
   }
   const count = replies.length;
   for (const text of ['0', '99', '01']) await bot.handleEvents([event(`ignored-${text}`, text)], now);
@@ -155,18 +156,43 @@ test('未查詢、超出範圍、無效按鈕都安全提示', async () => {
 });
 
 test('不同使用者與不同聊天室不共用列表或按鈕', async () => {
-  const { bot, replies } = selectable();
-  const source = { type: 'group', groupId: 'group-a', userId: 'alice' };
+  const controller = 'U' + 'a'.repeat(32);
+  const { bot, replies } = selectable({ config: { ...config, groupControllerUserId: controller } });
+  const source = { type: 'group', groupId: 'group-a', userId: controller };
   await bot.handleEvents([{ ...event('list'), source }], now);
   const data = replies[0].message.quickReply.items[0].action.data;
-  const sources = [
-    { ...source, userId: 'bob' }, { ...source, groupId: 'group-b' },
-    { type: 'user', userId: 'alice' }, { type: 'group', groupId: 'group-a' },
-  ];
-  for (const [i, other] of sources.entries()) {
-    await bot.handleEvents([{ ...postback(`other-${i}`, data), source: other }], now);
-    assert.match(replies.at(-1).message.text, /重新查詢/);
+  const count = replies.length;
+  await bot.handleEvents([{ ...postback('family-control', data), source: { ...source, userId: 'U' + 'b'.repeat(32) } }], now);
+  assert.equal(replies.length, count);
+  await bot.handleEvents([{ ...postback('other-group', data), source: { ...source, groupId: 'group-b' } }], now);
+  assert.match(replyText(replies.at(-1)), /重新查詢/);
+  await bot.handleEvents([{ ...postback('direct', data), source: { type: 'user', userId: controller } }], now);
+  assert.match(replyText(replies.at(-1)), /重新查詢/);
+  const beforeMissingUser = replies.length;
+  await bot.handleEvents([{ ...postback('missing-user', data), source: { type: 'group', groupId: 'group-a' } }], now);
+  assert.equal(replies.length, beforeMissingUser);
+});
+
+test('群組只有設定的管理者能控制，所有成員都能按「知道」', async () => {
+  const controller = 'U' + 'a'.repeat(32);
+  const family = 'U' + 'b'.repeat(32);
+  const { bot, replies, routes } = selectable({ config: { ...config, groupControllerUserId: controller } });
+  const group = { type: 'group', groupId: 'group-a', userId: controller };
+  await bot.handleEvents([{ ...event('controller-query'), source: group }], now);
+  const selectData = replies.at(-1).message.quickReply.items[0].action.data;
+  await bot.handleEvents([{ ...postback('controller-select', selectData), source: group }], now);
+  const boardData = replies.at(-1).message.quickReply.items[0].action.data;
+  const beforeFamily = { replies: replies.length, routes: routes.length };
+  for (const [i, text] of ['回程', '1', '已搭上', '沒搭上'].entries()) {
+    await bot.handleEvents([{ ...event(`family-${i}`, text), source: { ...group, userId: family } }], now);
   }
+  await bot.handleEvents([{ ...postback('family-board', boardData), source: { ...group, userId: family } }], now);
+  assert.deepEqual({ replies: replies.length, routes: routes.length }, beforeFamily);
+  await bot.handleEvents([{ ...postback('controller-board', boardData), source: group }], now);
+  assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程']);
+  await bot.handleEvents([{ ...postback('family-ack', 'ack:v1'), source: { ...group, userId: family } }], now);
+  assert.equal(replyText(replies.at(-1)), '知道了 👍');
+  assert.equal(replies.at(-1).message.quickReply, undefined);
 });
 
 test('列表到期、換日與容量淘汰後要求重查', async () => {
@@ -177,13 +203,13 @@ test('列表到期、換日與容量淘汰後要求重查', async () => {
   const oldData = replies[0].message.quickReply.items[0].action.data;
   await bot.handleEvents([event('new-list')], now);
   await bot.handleEvents([postback('evicted', oldData)], now);
-  assert.match(replies.at(-1).message.text, /重新查詢/);
+  assert.match(replyText(replies.at(-1)), /重新查詢/);
   clock = 100;
   await bot.handleEvents([event('expired', '1')], now);
-  assert.match(replies.at(-1).message.text, /重新查詢/);
+  assert.match(replyText(replies.at(-1)), /重新查詢/);
   await bot.handleEvents([event('again')], now);
   await bot.handleEvents([event('next-day', '1')], new Date('2026-08-29T00:00:00+08:00'));
-  assert.match(replies.at(-1).message.text, /重新查詢/);
+  assert.match(replyText(replies.at(-1)), /重新查詢/);
   assert.equal(selections.entries.size, 0);
   assert.equal(selections.latest.size, 0);
 });
@@ -197,7 +223,7 @@ test('LINE 失敗不取代最後已送出的列表', async () => {
   await bot.handleEvents([event('first')], now);
   await assert.rejects(bot.handleEvents([event('fail', '去程')], now));
   await bot.handleEvents([event('choose', '1')], now);
-  assert.match(sent.at(-1).text, /新左營 → 大湖\n已選擇區間車 1/);
+  assert.match(sent.at(-1).altText ?? sent.at(-1).text, /新左營 → 大湖\n已選擇區間車 1/);
 });
 
 test('空列表與 TDX 錯誤清除最新數字對應，不選到上次班次', async () => {
@@ -211,6 +237,6 @@ test('空列表與 TDX 錯誤清除最新數字對應，不選到上次班次', 
     await bot.handleEvents([event('first')], now);
     await bot.handleEvents([event('empty')], now);
     await bot.handleEvents([event('choose', '1')], now);
-    assert.match(replies.at(-1).message.text, /重新查詢/);
+    assert.match(replyText(replies.at(-1)), /重新查詢/);
   }
 });

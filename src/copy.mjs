@@ -17,13 +17,14 @@ export const defaultCopy = {
   missedTitle: '💨 差一點點，這班沒搭上',
   missed: ['{missedTitle}', '下一班約 {departure} 從{from}出發', '【預計於 {etaDisplay} 抵達{to}】'],
   boarded: ['🛤️ 已經上車啦，目前順利{direction}中', '【預計於 {etaDisplay} 抵達{to}】'],
+  acknowledged: '知道了 👍',
   missingSelection: '班次列表不存在或已過期。請先傳「去程」或「回程」重新查詢，再選擇班次。',
   invalidIndex: '請選擇 1～{count}，或重新傳「去程／回程」查詢。',
   lookupError: '⚠️ 目前無法取得台鐵時刻資料，請稍後再傳「去程」或「回程」。\n若要立即搭車，請以台鐵官方或車站公告為準。',
   rateLimit: '⚠️ 台鐵資料查詢暫時達到流量限制，請稍後再傳「去程」或「回程」。',
   stationError: '⚠️ 路線的車站設定無法使用，請管理者檢查 .env 的起訖站名稱。',
   help: ["🚆 台鐵通勤小幫手","去程：{outboundFrom} → {outboundTo}","回程：{returnFrom} → {returnTo}","","完整輸入「去程」或「回程」查詢，再輸入「1」「2」「3」選班次。","選班後：「已搭上」確認乘車；「沒搭上」查詢下一班。","已取消誤點追蹤與主動通知。其他聊天文字不會觸發。"],
-  buttonOutbound: '去程', buttonReturn: '回程', buttonBoarded: '已搭上', buttonMissed: '沒搭上',
+  buttonOutbound: '去程', buttonReturn: '回程', buttonBoarded: '搭上了', buttonMissed: '沒搭上', buttonAcknowledged: '知道',
 };
 
 const variables = new Set(['from', 'to', 'index', 'departure', 'type', 'number', 'departureMinutes', 'arrival', 'arrivalMinutes', 'time', 'date', 'count', 'arrivalDate', 'etaLine', 'liveLine', 'etaDate', 'eta', 'remaining', 'delay', 'updated', 'interval', 'threshold', 'reason', 'outboundFrom', 'outboundTo', 'returnFrom', 'returnTo', 'etaDisplay', 'etaShort', 'direction', 'missedTitle']);

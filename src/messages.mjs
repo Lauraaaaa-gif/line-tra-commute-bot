@@ -5,7 +5,11 @@ import { scheduledView, trainTimes } from './realtime.mjs';
 export function parseCommand(text) {
   if (typeof text !== 'string') return null;
   const command = text.normalize('NFKC').trim();
-  return ['去程', '回程', '說明', '已搭上', '沒搭上'].includes(command) ? command : null;
+  return ['去程', '回程', '說明', '已搭上', '搭上了', '沒搭上'].includes(command) ? command : null;
+}
+
+export function parseAcknowledgement(data) {
+  return data === 'ack:v1';
 }
 
 export function helpText(routes, copy = copyBook) {
@@ -56,14 +60,37 @@ export function arrivalText(result, train, instant = new Date(`${result.date}T${
 }
 
 const postback = (label, data) => ({ type: 'action', action: { type: 'postback', label, data, displayText: label } });
-export function textMessage(text, entry = null, { trip = null, copy = copyBook } = {}) {
+export function textMessage(text, entry = null, { trip = null, acknowledge = false, bare = false, emphasizeLastLine = false, copy = copyBook } = {}) {
   let buttons = entry ? entry.result.trains.map((_, i) => postback(String(i + 1), `arrival:${entry.id}:${i + 1}`)) : [];
   if (trip) buttons = [
     postback(copy.text('buttonBoarded'), `trip:board:${trip.id}`),
     postback(copy.text('buttonMissed'), `trip:miss:${trip.id}`),
   ];
+  if (acknowledge) buttons.push(postback(copy.text('buttonAcknowledged'), 'ack:v1'));
+  if (bare) return { type: 'text', text: text.slice(0, 5000) };
   buttons.push(...[['buttonOutbound', '去程'], ['buttonReturn', '回程']].map(([key, command]) => ({
     type: 'action', action: { type: 'message', label: copy.text(key), text: command },
   })));
-  return { type: 'text', text: text.slice(0, 5000), quickReply: { items: buttons } };
+  const quickReply = { items: buttons };
+  const lines = text.split('\n');
+  const emphasized = lines.at(-1);
+  if (!emphasizeLastLine || !/^【.+】$/.test(emphasized || '')) {
+    return { type: 'text', text: text.slice(0, 5000), quickReply };
+  }
+  const normal = lines.slice(0, -1).join('\n').replace(/\n+$/, '');
+  return {
+    type: 'flex',
+    altText: text.slice(0, 1500),
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'md',
+        contents: [
+          ...(normal ? [{ type: 'text', text: normal, wrap: true, size: 'md', color: '#111111' }] : []),
+          { type: 'text', text: emphasized, wrap: true, size: 'md', weight: 'bold', color: '#111111' },
+        ],
+      },
+    },
+    quickReply,
+  };
 }

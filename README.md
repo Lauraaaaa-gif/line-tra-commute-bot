@@ -164,7 +164,7 @@ Verify 通過只驗證 Webhook 收件與簽章，不會驗證 TDX，也不會真
 
 ### 長期部署
 
-可放到支援長駐 Node.js 的主機；設定四項環境變數、`HOST=0.0.0.0`、平台指定的 `PORT`，啟動指令為 `node src/server.mjs`。由平台或反向代理處理 HTTPS，健康檢查路徑設 `/health`。
+可放到支援長駐 Node.js 的主機；設定四項 API 環境變數、`HOST=0.0.0.0`、平台指定的 `PORT`，啟動指令為 `node src/server.mjs`。由平台或反向代理處理 HTTPS，健康檢查路徑設 `/health`。若要限制群組控制權，另設 `GROUP_CONTROLLER_USER_ID`；未設定時群組控制全部停用，私人聊天室不受影響。
 
 不要將 `.env` 加入部署映像檔。Docker 範例：
 

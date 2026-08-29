@@ -32,3 +32,5 @@ services:
         sync: false
       - key: TDX_CLIENT_SECRET
         sync: false
+      - key: GROUP_CONTROLLER_USER_ID
+        sync: false

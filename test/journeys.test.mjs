@@ -11,6 +11,7 @@ const source = { type: 'user', userId: 'tracking-user' };
 const now = Date.parse('2026-08-29T17:42:00+08:00');
 const train = { number: '3238', type: '區間車', departure: '17:48', arrival: '18:08', arrivalDayOffset: 0, afterDestination: ['4300'] };
 const result = { from: '新左營', to: '大湖', fromId: '4340', toId: '4290', date: '2026-08-29', time: '17:42', trains: [train] };
+const replyText = reply => reply.message.altText ?? reply.message.text;
 function setup() {
   let clock = now, delay = 0, known = true, reached = false;
   const pushes = [], replies = [], queries = [];
@@ -62,8 +63,9 @@ test('已搭上按鈕與完整指令回覆動態方向、抵達時間，不啟�
     const before = { queries: s.queries.length, pushes: s.pushes.length };
     if (byButton) await s.click('board', `trip:board:${chosen.id}`);
     else await s.send('board-text', '已搭上');
-    assert.equal(s.replies.at(-1).message.text, '🛤️ 已經上車啦，目前順利回程中\n【預計於 18:08 抵達大湖】');
-    assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['去程', '回程']);
+    assert.equal(replyText(s.replies.at(-1)), '🛤️ 已經上車啦，目前順利回程中\n【預計於 18:08 抵達大湖】');
+    assert.equal(s.replies.at(-1).message.contents.body.contents.at(-1).weight, 'bold');
+    assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程']);
     assert.deepEqual({ queries: s.queries.length, pushes: s.pushes.length }, before);
     assert.equal(s.tracker.choice(source), null);
   }
@@ -75,7 +77,7 @@ test('沒搭上按鈕隔離使用者，舊按鈕不覆蓋最新選擇', async ()
   assert.equal(parseTripAction(data).action, 'miss');
   assert.equal(parseTripAction(`${data}:extra`), null);
   await s.click('other', data, { ...source, userId: 'other' });
-  assert.match(s.replies.at(-1).message.text, /重新查詢/);
+  assert.match(replyText(s.replies.at(-1)), /重新查詢/);
   await s.send('new-choice', '1');
   const latest = s.tracker.choice(source);
   await s.click('old', data);
@@ -94,7 +96,7 @@ test('選擇過期、重查與封鎖後沒搭上要求重新選車', async () =>
     if (reason === 'unfollow') await s.bot.handleEvents([{ type: 'unfollow', source }], new Date(now));
     const count = s.queries.length;
     await s.send('miss', '沒搭上');
-    assert.match(s.replies.at(-1).message.text, /重新查詢/);
+    assert.match(replyText(s.replies.at(-1)), /重新查詢/);
     assert.equal(s.queries.length, count);
   }
 });
@@ -109,20 +111,22 @@ test('選車回覆失敗不記住未送出的選擇', async () => {
 
 test('保留列表與選車格式；只在選車時估算抵達時間', async () => {
   const s = setup(); await s.send('query', '回程');
-  assert.equal(s.replies[0].message.text, '🚆 新左營 → 大湖\n\n最近班次\n① 17:48　區間車 3238\n\n查詢日期：2026-08-29\n現在時間：17:42（台灣時間）');
+  assert.equal(replyText(s.replies[0]), '🚆 新左營 → 大湖\n\n最近班次\n① 17:48　區間車 3238\n\n查詢日期：2026-08-29\n現在時間：17:42（台灣時間）');
   s.setDelay(7); await s.send('select', '1');
-  assert.equal(s.replies.at(-1).message.text, '🚆 新左營 → 大湖\n已選擇區間車 3238\n\n預計於 17:48 於新左營上車\n【抵達大湖時間約 18:15】');
-  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['已搭上', '沒搭上', '去程', '回程']);
+  assert.equal(replyText(s.replies.at(-1)), '🚆 新左營 → 大湖\n已選擇區間車 3238\n\n預計於 17:48 於新左營上車\n【抵達大湖時間約 18:15】');
+  assert.equal(s.replies.at(-1).message.contents.body.contents.at(-1).weight, 'bold');
+  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '去程', '回程']);
 });
 
 test('沒搭上重查下一班，傳遞明確排除車次', async () => {
   const s = setup(); await choose(s); await s.send('miss', '沒搭上');
   assert.deepEqual(s.queries.at(-1).options.exclude, { number: '3238', departure: '17:48' });
   assert.equal(s.queries.length, 2);
-  assert.equal(s.replies.at(-1).message.text, '💨 差一點點，這班沒搭上\n下一班約 18:26 從新左營出發\n【預計於 18:55 抵達大湖】');
+  assert.equal(replyText(s.replies.at(-1)), '💨 差一點點，這班沒搭上\n下一班約 18:26 從新左營出發\n【預計於 18:55 抵達大湖】');
+  assert.equal(s.replies.at(-1).message.contents.body.contents.at(-1).weight, 'bold');
   assert.equal(s.tracker.choice(source).train.number, '3242');
   assert.equal(s.tracker.choice(source).train.departure, '18:26');
-  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['已搭上', '沒搭上', '去程', '回程']);
+  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '知道', '去程', '回程']);
 });
 
 test('沒搭上後查無下一班或查詢失敗，不捏造出發／抵達時間', async () => {
@@ -133,7 +137,7 @@ test('沒搭上後查無下一班或查詢失敗，不捏造出發／抵達時�
     const bot = createBot({ config: readConfig({}, { requireLine: false, requireTdx: false }), selections: s.selections, journeys: s.tracker,
       lineClient: s.lineClient, logger: silentLogger, trainService: { async lookup() { if (fail) throw new Error('test'); return { ...result, trains: [] }; } } });
     await bot.handleEvents([s.event('miss', '沒搭上')], new Date(now));
-    const text = s.replies.at(-1).message.text;
+    const text = replyText(s.replies.at(-1));
     assert.match(text, /差一點點/); assert.match(text, fail ? /無法取得/ : /查無符合條件/);
     assert.doesNotMatch(text, /下一班約|NaN|undefined|【預計/);
     assert.equal(s.tracker.choice(source), null);

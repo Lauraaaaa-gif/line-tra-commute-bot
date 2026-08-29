@@ -86,6 +86,7 @@ test('僅完整指令，去除首尾空白，不接受別名或模糊比對', ()
   assert.equal(parseCommand('HELP'), null);
   assert.equal(parseCommand('我已經上車了'), null);
   assert.equal(parseCommand('已搭上'), '已搭上');
+  assert.equal(parseCommand('搭上了'), '搭上了');
   assert.equal(parseCommand('明天回程'), null);
   assert.equal(parseCommand(null), null);
   assert.deepEqual(textMessage('test').quickReply.items.map(x => x.action.label), ['去程', '回程']);

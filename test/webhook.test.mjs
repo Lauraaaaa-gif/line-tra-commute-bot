@@ -18,6 +18,7 @@ const secret = 'webhook-test-secret';
 const now = new Date('2026-08-28T17:42:00+08:00');
 const sign = raw => createHmac('sha256', secret).update(raw).digest('base64');
 const event = { type: 'message', webhookEventId: 'integration-1', replyToken: 'mock-reply', message: { type: 'text', text: '回程' }, source: { type: 'user', userId: 'integration-user' } };
+const messageText = message => message.altText ?? message.text;
 
 async function serve(t, options = {}) {
   const app = createApp({ secret, logger: silentLogger, clock: () => now, bot: { async handleEvents() {} }, ...options });
@@ -79,8 +80,8 @@ test('完整 HTTP Webhook → TDX OAuth/車站/班表 → LINE reply，無外部
   assert.equal((await post(body)).status, 200);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].replyToken, 'mock-reply');
-  assert.match(sent[0].messages[0].text, /① 17:48　區間車 3238/);
-  assert.doesNotMatch(sent[0].messages[0].text, /④/);
+  assert.match(messageText(sent[0].messages[0]), /① 17:48　區間車 3238/);
+  assert.doesNotMatch(messageText(sent[0].messages[0]), /④/);
   assert.equal(sent[0].messages[0].quickReply.items.length, 5);
   assert.equal(calls.length, 4);
   assert.equal((await post(body)).status, 200);
@@ -89,7 +90,8 @@ test('完整 HTTP Webhook → TDX OAuth/車站/班表 → LINE reply，無外部
   const selectionBody = JSON.stringify({ events: [{ ...event, type: 'postback', message: undefined,
     webhookEventId: 'integration-selection', replyToken: 'selection-reply', postback: { data } }] });
   assert.equal((await post(selectionBody)).status, 200);
-  assert.match(sent[1].messages[0].text, /【抵達大湖時間約 17:48】/);
+  assert.match(messageText(sent[1].messages[0]), /【抵達大湖時間約 17:48】/);
+  assert.equal(sent[1].messages[0].contents.body.contents.at(-1).weight, 'bold');
   assert.equal(sent[1].replyToken, 'selection-reply');
   assert.equal(calls.length, 5); // 只新增 LINE reply，沒有再次查詢 TDX。
   assert.equal((await post(selectionBody)).status, 200);
@@ -128,14 +130,15 @@ test('完整簽章 HTTP 選車即時估算保留，舊上車指令及按鈕不�
   };
   await command('query', '回程'); await command('select', '1');
   const selected = sent.at(-1).data.messages[0];
-  assert.deepEqual(selected.quickReply.items.map(x => x.action.label), ['已搭上', '沒搭上', '去程', '回程']);
-  assert.match(selected.text, /抵達大湖時間約 17:54/);
+  assert.deepEqual(selected.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '去程', '回程']);
+  assert.match(messageText(selected), /抵達大湖時間約 17:54/);
   const oldId = selected.quickReply.items[0].action.data.split(':')[2];
   const count = sent.length;
   assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: 'board', postback: { data: 'trip:board:' + oldId } }] }))).status, 200);
   assert.equal(sent.length, count + 1);
-  assert.equal(sent.at(-1).data.messages[0].text, '🛤️ 已經上車啦，目前順利回程中\n【預計於 17:54 抵達大湖】');
-  assert.deepEqual(sent.at(-1).data.messages[0].quickReply.items.map(x => x.action.label), ['去程', '回程']);
+  assert.equal(messageText(sent.at(-1).data.messages[0]), '🛤️ 已經上車啦，目前順利回程中\n【預計於 17:54 抵達大湖】');
+  assert.equal(sent.at(-1).data.messages[0].contents.body.contents.at(-1).weight, 'bold');
+  assert.deepEqual(sent.at(-1).data.messages[0].quickReply.items.map(x => x.action.label), ['知道', '去程', '回程']);
   const afterBoard = sent.length;
   await command('board-alias', '上車了'); await command('stop-text', '停止通知');
   assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: 'stop', postback: { data: 'trip:stop:' + oldId } }] }))).status, 200);

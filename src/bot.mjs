@@ -1,4 +1,4 @@
-import { arrivalText, errorText, helpText, parseCommand, textMessage, timetableText, tripVariables } from './messages.mjs';
+import { arrivalText, errorText, helpText, parseAcknowledgement, parseCommand, textMessage, timetableText, tripVariables } from './messages.mjs';
 import { SelectionStore, parseSelection, parseArrivalPostback } from './selections.mjs';
 import { JourneyChoices, parseTripAction } from './journeys.mjs';
 import { copyBook } from './copy.mjs';
@@ -60,9 +60,12 @@ export function createBot({ config, trainService, lineClient, logger = console, 
     const selection = isText ? parseSelection(event.message.text)
       : event.type === 'postback' ? parseArrivalPostback(event.postback?.data) : null;
     const tripAction = event.type === 'postback' ? parseTripAction(event.postback?.data) : null;
+    const acknowledged = event.type === 'postback' && parseAcknowledgement(event.postback?.data);
     const command = isText ? parseCommand(event.message.text) : null;
+    const groupChat = event.source?.type === 'group' || event.source?.type === 'room';
+    const groupController = !groupChat || Boolean(config.groupControllerUserId) && event.source?.userId === config.groupControllerUserId;
     // 所有聊天室都只接受完整指令，不因關鍵字、閒聊或加入好友觸發。
-    if (!command && !selection && !tripAction) return;
+    if (!acknowledged && (!groupController || !command && !selection && !tripAction)) return;
     const id = event.webhookEventId || event.message?.id;
     if (typeof id !== 'string' || !id) throw new ServiceError('INVALID_EVENT');
     return dedupe.run(id, () => serial(owner, async () => {
@@ -72,6 +75,9 @@ export function createBot({ config, trainService, lineClient, logger = console, 
         let text;
         let entry = null;
         let trip = null;
+        let acknowledge = false;
+        let bare = false;
+        let emphasizeLastLine = false;
         let afterReply = () => {};
         const lookup = async (direction, missed = false, exclude = null) => {
           const prefix = missed ? copy.text('missedTitle') + '\n' : '';
@@ -84,6 +90,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
               const next = displayed.trains[0];
               const view = await journeys.view(displayed, next, receivedAt);
               text = copy.text('missed', { ...tripVariables(displayed, next, view, receivedAt, copy), missedTitle: copy.text('missedTitle') });
+              emphasizeLastLine = true;
               if (entry) trip = journeys.prepare(event.source, entry, next, view);
             } else if (missed) text = prefix + copy.text('noTrains');
             else {
@@ -102,7 +109,10 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             if (trip) journeys.remember(trip);
           };
         };
-        if (command === '去程' || command === '回程') {
+        if (acknowledged) {
+          text = copy.text('acknowledged');
+          bare = true;
+        } else if (command === '去程' || command === '回程') {
           await lookup(command);
         } else if (selection) {
           const selected = selections.select(event.source, selection, receivedAt);
@@ -115,9 +125,10 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             const view = await journeys.view(entry.result, selected.train, receivedAt);
             trip = journeys.prepare(event.source, entry, selected.train, view);
             text = arrivalText(entry.result, selected.train, receivedAt, view, copy);
+            emphasizeLastLine = true;
             afterReply = () => journeys.remember(trip);
           }
-        } else if (tripAction?.action === 'board' || command === '已搭上') {
+        } else if (tripAction?.action === 'board' || command === '已搭上' || command === '搭上了') {
           const boardedTrip = journeys.choice(event.source, tripAction?.id);
           if (!boardedTrip) {
             text = copy.text('missingSelection');
@@ -126,6 +137,8 @@ export function createBot({ config, trainService, lineClient, logger = console, 
               ...tripVariables(boardedTrip.result, boardedTrip.train, boardedTrip.view, receivedAt, copy),
               direction: boardedTrip.command,
             });
+            acknowledge = true;
+            emphasizeLastLine = true;
             trip = null;
             afterReply = () => journeys.forget(event.source, boardedTrip.id);
           }
@@ -138,12 +151,13 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             const missedTrip = trip;
             trip = null;
             await lookup(missedTrip.command, true, { number: missedTrip.train.number, departure: missedTrip.train.departure });
+            acknowledge = true;
           }
         } else {
           text = helpText(config.routes, copy);
         }
         // 回覆成功才標記完成；LINE 失敗會回傳非 2xx，供 Webhook redelivery 重試。
-        await lineClient.reply(event.replyToken, textMessage(text, entry, { trip, copy }));
+        await lineClient.reply(event.replyToken, textMessage(text, entry, { trip, acknowledge, bare, emphasizeLastLine, copy }));
         afterReply();
       } finally {
         active--;
