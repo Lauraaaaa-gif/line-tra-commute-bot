@@ -3,7 +3,7 @@ import { scheduledView } from './realtime.mjs';
 
 export function parseTripAction(data) {
   if (typeof data !== 'string') return null;
-  const m = /^trip:(miss):([A-Za-z0-9_-]{16})$/.exec(data);
+  const m = /^trip:(board|miss):([A-Za-z0-9_-]{16})$/.exec(data);
   return m ? { action: m[1], id: m[2] } : null;
 }
 

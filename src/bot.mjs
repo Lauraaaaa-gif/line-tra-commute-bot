@@ -117,7 +117,19 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             text = arrivalText(entry.result, selected.train, receivedAt, view, copy);
             afterReply = () => journeys.remember(trip);
           }
-        } else if (tripAction || command === '沒搭上') {
+        } else if (tripAction?.action === 'board' || command === '已搭上') {
+          const boardedTrip = journeys.choice(event.source, tripAction?.id);
+          if (!boardedTrip) {
+            text = copy.text('missingSelection');
+          } else {
+            text = copy.text('boarded', {
+              ...tripVariables(boardedTrip.result, boardedTrip.train, boardedTrip.view, receivedAt, copy),
+              direction: boardedTrip.command,
+            });
+            trip = null;
+            afterReply = () => journeys.forget(event.source, boardedTrip.id);
+          }
+        } else if (tripAction?.action === 'miss' || command === '沒搭上') {
           trip = journeys.choice(event.source, tripAction?.id);
           if (!trip) {
             text = copy.text('missingSelection');

@@ -5,7 +5,7 @@ import { scheduledView, trainTimes } from './realtime.mjs';
 export function parseCommand(text) {
   if (typeof text !== 'string') return null;
   const command = text.normalize('NFKC').trim();
-  return ['去程', '回程', '說明', '沒搭上'].includes(command) ? command : null;
+  return ['去程', '回程', '說明', '已搭上', '沒搭上'].includes(command) ? command : null;
 }
 
 export function helpText(routes, copy = copyBook) {
@@ -58,7 +58,10 @@ export function arrivalText(result, train, instant = new Date(`${result.date}T${
 const postback = (label, data) => ({ type: 'action', action: { type: 'postback', label, data, displayText: label } });
 export function textMessage(text, entry = null, { trip = null, copy = copyBook } = {}) {
   let buttons = entry ? entry.result.trains.map((_, i) => postback(String(i + 1), `arrival:${entry.id}:${i + 1}`)) : [];
-  if (trip) buttons = [postback(copy.text('buttonMissed'), `trip:miss:${trip.id}`)];
+  if (trip) buttons = [
+    postback(copy.text('buttonBoarded'), `trip:board:${trip.id}`),
+    postback(copy.text('buttonMissed'), `trip:miss:${trip.id}`),
+  ];
   buttons.push(...[['buttonOutbound', '去程'], ['buttonReturn', '回程']].map(([key, command]) => ({
     type: 'action', action: { type: 'message', label: copy.text(key), text: command },
   })));

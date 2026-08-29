@@ -23,6 +23,10 @@
     "下一班約 {departure} 從{from}出發",
     "【預計於 {etaDisplay} 抵達{to}】"
   ],
+  "boarded": [
+    "🛤️ 已經上車啦，目前順利{direction}中",
+    "【預計於 {etaDisplay} 抵達{to}】"
+  ],
   "missingSelection": "班次列表不存在或已過期。請先傳「去程」或「回程」重新查詢，再選擇班次。",
   "invalidIndex": "請選擇 1～{count}，或重新傳「去程／回程」查詢。",
   "lookupError": "⚠️ 目前無法取得台鐵時刻資料，請稍後再傳「去程」或「回程」。\n若要立即搭車，請以台鐵官方或車站公告為準。",
@@ -34,11 +38,12 @@
     "回程：{returnFrom} → {returnTo}",
     "",
     "完整輸入「去程」或「回程」查詢，再輸入「1」「2」「3」選班次。",
-    "選班後：「沒搭上」查詢下一班。",
+    "選班後：「已搭上」確認乘車；「沒搭上」查詢下一班。",
     "已取消誤點追蹤與主動通知。其他聊天文字不會觸發。"
   ],
   "buttonOutbound": "去程",
   "buttonReturn": "回程",
+  "buttonBoarded": "已搭上",
   "buttonMissed": "沒搭上",
   "missedTitle": "💨 差一點點，這班沒搭上"
 }

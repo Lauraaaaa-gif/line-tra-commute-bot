@@ -128,15 +128,18 @@ test('完整簽章 HTTP 選車即時估算保留，舊上車指令及按鈕不�
   };
   await command('query', '回程'); await command('select', '1');
   const selected = sent.at(-1).data.messages[0];
-  assert.deepEqual(selected.quickReply.items.map(x => x.action.label), ['沒搭上', '去程', '回程']);
+  assert.deepEqual(selected.quickReply.items.map(x => x.action.label), ['已搭上', '沒搭上', '去程', '回程']);
   assert.match(selected.text, /抵達大湖時間約 17:54/);
   const oldId = selected.quickReply.items[0].action.data.split(':')[2];
   const count = sent.length;
-  for (const action of ['board', 'stop']) {
-    assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: action, postback: { data: 'trip:' + action + ':' + oldId } }] }))).status, 200);
-  }
-  await command('board-text', '上車了'); await command('stop-text', '停止通知');
-  assert.equal(sent.length, count);
+  assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: 'board', postback: { data: 'trip:board:' + oldId } }] }))).status, 200);
+  assert.equal(sent.length, count + 1);
+  assert.equal(sent.at(-1).data.messages[0].text, '🛤️ 已經上車啦，目前順利回程中\n【預計於 17:54 抵達大湖】');
+  assert.deepEqual(sent.at(-1).data.messages[0].quickReply.items.map(x => x.action.label), ['去程', '回程']);
+  const afterBoard = sent.length;
+  await command('board-alias', '上車了'); await command('stop-text', '停止通知');
+  assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: 'stop', postback: { data: 'trip:stop:' + oldId } }] }))).status, 200);
+  assert.equal(sent.length, afterBoard);
   assert.equal(sent.filter(x => x.path.endsWith('/push')).length, 0);
   bot.close();
 });

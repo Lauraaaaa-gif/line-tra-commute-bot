@@ -32,7 +32,7 @@ function setup() {
 }
 async function choose(s) { await s.send('query', '回程'); await s.send('select', '1'); }
 
-test('已移除的上車／停止文字與舊按鈕全部忽略，不呼叫上游', async t => {
+test('只接受完整「已搭上」指令；舊別名、停止文字與舊停止按鈕忽略', async t => {
   let timers = 0;
   t.mock.method(globalThis, 'setInterval', () => { timers++; throw new Error('unexpected timer'); });
   const s = setup();
@@ -44,11 +44,9 @@ test('已移除的上車／停止文字與舊按鈕全部忽略，不呼叫上�
   const before = { replies: s.replies.length, queries: s.queries.length, views };
   s.setDelay(30); s.advance(60000);
   for (const text of ['上車了', '停止通知', '我上車了', '已上車', '回程一下', '回程選擇1', '1 2']) await s.send(text, text);
-  for (const action of ['board', 'stop']) {
-    const data = `trip:${action}:${id}`;
-    assert.equal(parseTripAction(data), null);
-    await s.click(action, data);
-  }
+  const data = `trip:stop:${id}`;
+  assert.equal(parseTripAction(data), null);
+  await s.click('stop', data);
   assert.deepEqual({ replies: s.replies.length, queries: s.queries.length, views }, before);
   assert.equal(s.pushes.length, 0);
   assert.equal(timers, 0);
@@ -57,9 +55,23 @@ test('已移除的上車／停止文字與舊按鈕全部忽略，不呼叫上�
   assert.equal(s.tracker.choices.size, 0);
 });
 
+test('已搭上按鈕與完整指令回覆動態方向、抵達時間，不啟動追蹤', async () => {
+  for (const byButton of [true, false]) {
+    const s = setup(); await choose(s);
+    const chosen = s.tracker.choice(source);
+    const before = { queries: s.queries.length, pushes: s.pushes.length };
+    if (byButton) await s.click('board', `trip:board:${chosen.id}`);
+    else await s.send('board-text', '已搭上');
+    assert.equal(s.replies.at(-1).message.text, '🛤️ 已經上車啦，目前順利回程中\n【預計於 18:08 抵達大湖】');
+    assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['去程', '回程']);
+    assert.deepEqual({ queries: s.queries.length, pushes: s.pushes.length }, before);
+    assert.equal(s.tracker.choice(source), null);
+  }
+});
+
 test('沒搭上按鈕隔離使用者，舊按鈕不覆蓋最新選擇', async () => {
   const s = setup(); await choose(s);
-  const data = s.replies.at(-1).message.quickReply.items[0].action.data;
+  const data = s.replies.at(-1).message.quickReply.items[1].action.data;
   assert.equal(parseTripAction(data).action, 'miss');
   assert.equal(parseTripAction(`${data}:extra`), null);
   await s.click('other', data, { ...source, userId: 'other' });
@@ -100,7 +112,7 @@ test('保留列表與選車格式；只在選車時估算抵達時間', async ()
   assert.equal(s.replies[0].message.text, '🚆 新左營 → 大湖\n\n最近班次\n① 17:48　區間車 3238\n\n查詢日期：2026-08-29\n現在時間：17:42（台灣時間）');
   s.setDelay(7); await s.send('select', '1');
   assert.equal(s.replies.at(-1).message.text, '🚆 新左營 → 大湖\n已選擇區間車 3238\n\n預計於 17:48 於新左營上車\n【抵達大湖時間約 18:15】');
-  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['沒搭上', '去程', '回程']);
+  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['已搭上', '沒搭上', '去程', '回程']);
 });
 
 test('沒搭上重查下一班，傳遞明確排除車次', async () => {
@@ -110,7 +122,7 @@ test('沒搭上重查下一班，傳遞明確排除車次', async () => {
   assert.equal(s.replies.at(-1).message.text, '💨 差一點點，這班沒搭上\n下一班約 18:26 從新左營出發\n【預計於 18:55 抵達大湖】');
   assert.equal(s.tracker.choice(source).train.number, '3242');
   assert.equal(s.tracker.choice(source).train.departure, '18:26');
-  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['沒搭上', '去程', '回程']);
+  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['已搭上', '沒搭上', '去程', '回程']);
 });
 
 test('沒搭上後查無下一班或查詢失敗，不捏造出發／抵達時間', async () => {
