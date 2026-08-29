@@ -84,7 +84,7 @@ export function createWorker() {
 export default createWorker();
 
 export class BotState {
-  constructor(state, env, { fetchImpl = fetch, clock = Date.now } = {}) {
+  constructor(state, env, { fetchImpl = (...args) => fetch(...args), clock = Date.now } = {}) {
     this.state = state;
     this.env = env;
     this.tail = Promise.resolve();
