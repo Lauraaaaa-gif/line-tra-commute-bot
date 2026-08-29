@@ -53,13 +53,13 @@ test('上游連線與回應 body 都有 timeout', async () => {
   } finally { clearTimeout(keepAlive); }
 });
 
-test('LINE replyToken 與單筆 text message 結構正確，拒絕 redirect', async () => {
+test('LINE replyToken 與單筆 text message 結構正確，手動處理 redirect', async () => {
   const message = { type: 'text', text: '測試' };
   const line = new LineClient({ accessToken: 'mock-access-token', fetchImpl: async (url, init) => {
     assert.equal(url, 'https://api.line.me/v2/bot/message/reply');
     assert.equal(init.method, 'POST');
     assert.equal(init.headers.Authorization, 'Bearer mock-access-token');
-    assert.equal(init.redirect, 'error');
+    assert.equal(init.redirect, 'manual');
     assert.deepEqual(JSON.parse(init.body), { replyToken: 'mock-reply-token', messages: [message] });
     return reply({ sentMessages: [] });
   } });

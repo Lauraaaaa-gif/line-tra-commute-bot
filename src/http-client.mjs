@@ -5,14 +5,15 @@ export function runtimeFetch(input, init) {
   return globalThis.fetch(input, init);
 }
 
-// timeout 涵蓋 headers + JSON body，第三方 API 的 redirect 一律拒絕。
+// timeout 涵蓋 headers + JSON body；Workers 不支援 redirect: 'error'，
+// 因此用 manual，並將 3xx 視為非成功回應。
 export async function requestJson(url, init = {}, {
   fetchImpl = runtimeFetch, timeoutMs = 4000, signal, service = 'UPSTREAM', acceptRetryConflict = false,
 } = {}) {
   const timeout = AbortSignal.timeout(timeoutMs);
   const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
-    const response = await fetchImpl(url, { ...init, signal: combined, redirect: 'error' });
+    const response = await fetchImpl(url, { ...init, signal: combined, redirect: 'manual' });
     if (acceptRetryConflict && response.status === 409 && response.headers.get('x-line-accepted-request-id')) {
       await response.body?.cancel();
       return { alreadyAccepted: true };
