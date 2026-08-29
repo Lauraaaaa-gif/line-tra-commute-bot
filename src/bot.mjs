@@ -1,4 +1,4 @@
-import { arrivalText, errorText, helpText, parseAcknowledgement, parseCommand, textMessage, timetableText, tripVariables } from './messages.mjs';
+import { acknowledgementMessage, arrivalText, errorText, helpText, parseAcknowledgement, parseCommand, textMessage, timetableText, tripVariables } from './messages.mjs';
 import { SelectionStore, parseSelection, parseArrivalPostback } from './selections.mjs';
 import { JourneyChoices, parseTripAction } from './journeys.mjs';
 import { staticCopyBook } from './copy-core.mjs';
@@ -100,6 +100,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
         let trip = null;
         let acknowledge = false;
         let bare = false;
+        let message = null;
         let emphasizeLastLine = false;
         let afterReply = () => {};
         const lookup = async (direction, missed = false, exclude = null) => {
@@ -134,7 +135,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
         };
         if (acknowledged) {
           text = copy.text('acknowledged');
-          bare = true;
+          message = acknowledgementMessage(event.source, copy);
         } else if (command === '去程' || command === '回程') {
           await lookup(command);
         } else if (selection) {
@@ -180,7 +181,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
           text = helpText(config.routes, copy);
         }
         // 回覆成功才標記完成；LINE 失敗會回傳非 2xx，供 Webhook redelivery 重試。
-        await lineClient.reply(event.replyToken, textMessage(text, entry, { trip, acknowledge, bare, emphasizeLastLine, copy }));
+        await lineClient.reply(event.replyToken, message || textMessage(text, entry, { trip, acknowledge, bare, emphasizeLastLine, copy }));
         afterReply();
       } finally {
         active--;

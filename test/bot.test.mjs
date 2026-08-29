@@ -191,7 +191,11 @@ test('群組只有設定的管理者能控制，所有成員都能按「知道�
   await bot.handleEvents([{ ...postback('controller-board', boardData), source: group }], now);
   assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程']);
   await bot.handleEvents([{ ...postback('family-ack', 'ack:v1'), source: { ...group, userId: family } }], now);
-  assert.equal(replyText(replies.at(-1)), '知道了 👍');
+  assert.equal(replies.at(-1).message.type, 'textV2');
+  assert.equal(replies.at(-1).message.text, '{acknowledger} 已確認收到');
+  assert.deepEqual(replies.at(-1).message.substitution, {
+    acknowledger: { type: 'mention', mentionee: { type: 'user', userId: family } },
+  });
   assert.equal(replies.at(-1).message.quickReply, undefined);
 });
 

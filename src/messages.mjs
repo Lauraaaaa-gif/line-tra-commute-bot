@@ -12,6 +12,21 @@ export function parseAcknowledgement(data) {
   return data === 'ack:v1';
 }
 
+// LINE 的 mention 只可用在群組／多人聊天室；私訊則使用不含標記的同一文案。
+export function acknowledgementMessage(source, copy = staticCopyBook) {
+  const text = copy.text('acknowledged');
+  if (!['group', 'room'].includes(source?.type) || typeof source.userId !== 'string' || !source.userId) {
+    return { type: 'text', text };
+  }
+  return {
+    type: 'textV2',
+    text: `{acknowledger} ${text}`,
+    substitution: {
+      acknowledger: { type: 'mention', mentionee: { type: 'user', userId: source.userId } },
+    },
+  };
+}
+
 export function helpText(routes, copy = staticCopyBook) {
   return copy.text('help', { outboundFrom: routes.去程.from, outboundTo: routes.去程.to, returnFrom: routes.回程.from, returnTo: routes.回程.to });
 }

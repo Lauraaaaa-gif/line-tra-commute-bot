@@ -15,7 +15,7 @@ export const defaultCopy = {
   missedTitle: '💨 差一點點，這班沒搭上',
   missed: ['{missedTitle}', '下一班約 {departure} 從{from}出發', '【預計於 {etaDisplay} 抵達{to}】'],
   boarded: ['🛤️ 已經上車啦，目前順利{direction}中', '【預計於 {etaDisplay} 抵達{to}】'],
-  acknowledged: '知道了 👍',
+  acknowledged: '已確認收到',
   missingSelection: '班次列表不存在或已過期。請先傳「去程」或「回程」重新查詢，再選擇班次。',
   invalidIndex: '請選擇 1～{count}，或重新傳「去程／回程」查詢。',
   lookupError: '⚠️ 目前無法取得台鐵時刻資料，請稍後再傳「去程」或「回程」。\n若要立即搭車，請以台鐵官方或車站公告為準。',
