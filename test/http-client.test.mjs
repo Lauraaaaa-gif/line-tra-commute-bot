@@ -1,9 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requestJson } from '../src/http-client.mjs';
+import { requestJson, runtimeFetch } from '../src/http-client.mjs';
 import { LineClient, verifySignature } from '../src/line.mjs';
 import { createHmac } from 'node:crypto';
 import { reply } from '../fixtures/sample.mjs';
+
+test('runtimeFetch 保留 Cloudflare 全域 fetch 的 this 綁定', async () => {
+  const original = globalThis.fetch;
+  let called = false;
+  try {
+    globalThis.fetch = function(input) {
+      assert.equal(this, globalThis);
+      called = true;
+      return Promise.resolve(Response.json({ ok: true, input: String(input) }));
+    };
+    const response = await runtimeFetch('https://example.com/test');
+    assert.equal(response.ok, true);
+    assert.equal(called, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 
 test('HMAC 使用原始 bytes，防止竄改與錯誤 secret', () => {
   const raw = Buffer.from('{"events":[],"text":"中文🚆\\n"}');

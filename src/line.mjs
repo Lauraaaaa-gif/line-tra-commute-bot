@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { requestJson } from './http-client.mjs';
+import { requestJson, runtimeFetch } from './http-client.mjs';
 
 export function verifySignature(rawBody, signature, secret) {
   if (!Buffer.isBuffer(rawBody) || typeof signature !== 'string' || !secret) return false;
@@ -11,7 +11,7 @@ export function verifySignature(rawBody, signature, secret) {
 }
 
 export class LineClient {
-  constructor({ accessToken, fetchImpl = fetch, timeoutMs = 4000 }) {
+  constructor({ accessToken, fetchImpl = runtimeFetch, timeoutMs = 4000 }) {
     this.accessToken = accessToken;
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;

@@ -1,4 +1,4 @@
-import { requestJson } from './http-client.mjs';
+import { requestJson, runtimeFetch } from './http-client.mjs';
 import { ServiceError } from './errors.mjs';
 
 const TOKEN_URL = 'https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token';
@@ -9,7 +9,7 @@ export function normalizeStationName(name) {
 }
 
 export class TdxClient {
-  constructor({ clientId, clientSecret, fetchImpl = fetch, clock = Date.now, cacheMs = 60000, pageSize = 1000 }) {
+  constructor({ clientId, clientSecret, fetchImpl = runtimeFetch, clock = Date.now, cacheMs = 60000, pageSize = 1000 }) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
     this.fetchImpl = fetchImpl;
@@ -121,4 +121,3 @@ export class TdxClient {
     return value;
   }
 }
-

@@ -80,7 +80,15 @@ export function createBot({ config, trainService, lineClient, logger = console, 
     const groupChat = event.source?.type === 'group' || event.source?.type === 'room';
     const groupController = !groupChat || Boolean(config.groupControllerUserId) && event.source?.userId === config.groupControllerUserId;
     // 所有聊天室都只接受完整指令，不因關鍵字、閒聊或加入好友觸發。
-    if (!acknowledged && (!groupController || !command && !selection && !tripAction)) return;
+    if (!acknowledged && (!groupController || !command && !selection && !tripAction)) {
+      // 僅記錄判斷結果，絕不寫出訊息內容、User ID、聊天室 ID 或 replyToken。
+      logger.log('event_ignored', {
+        reason: !groupController ? 'GROUP_NOT_CONTROLLER' : 'UNRECOGNIZED_INPUT',
+        sourceType: event.source?.type || 'unknown',
+        recognized: Boolean(command || selection || tripAction),
+      });
+      return;
+    }
     const id = event.webhookEventId || event.message?.id;
     if (typeof id !== 'string' || !id) throw new ServiceError('INVALID_EVENT');
     return dedupe.run(id, () => serial(owner, async () => {

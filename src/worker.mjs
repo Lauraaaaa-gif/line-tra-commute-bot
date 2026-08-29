@@ -9,6 +9,7 @@ import { JourneyChoices } from './journeys.mjs';
 import { RealtimeService } from './realtime.mjs';
 import { StaticCopyBook } from './copy-core.mjs';
 import { safeError } from './errors.mjs';
+import { runtimeFetch } from './http-client.mjs';
 
 const MAX_BODY_BYTES = 256 * 1024;
 const copy = new StaticCopyBook(wording);
@@ -84,7 +85,7 @@ export function createWorker() {
 export default createWorker();
 
 export class BotState {
-  constructor(state, env, { fetchImpl = (...args) => fetch(...args), clock = Date.now } = {}) {
+  constructor(state, env, { fetchImpl = runtimeFetch, clock = Date.now } = {}) {
     this.state = state;
     this.env = env;
     this.tail = Promise.resolve();
