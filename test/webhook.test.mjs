@@ -91,7 +91,7 @@ test('完整 HTTP Webhook → TDX OAuth/車站/班表 → LINE reply，無外部
     webhookEventId: 'integration-selection', replyToken: 'selection-reply', postback: { data } }] });
   assert.equal((await post(selectionBody)).status, 200);
   assert.match(messageText(sent[1].messages[0]), /【抵達大湖時間約 17:48】/);
-  assert.equal(sent[1].messages[0].contents.body.contents.at(-1).weight, 'bold');
+  assert.equal(sent[1].messages[0].type, 'text');
   assert.equal(sent[1].replyToken, 'selection-reply');
   assert.equal(calls.length, 5); // 只新增 LINE reply，沒有再次查詢 TDX。
   assert.equal((await post(selectionBody)).status, 200);
@@ -137,7 +137,7 @@ test('完整簽章 HTTP 選車即時估算保留，舊上車指令及按鈕不�
   assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: 'board', postback: { data: 'trip:board:' + oldId } }] }))).status, 200);
   assert.equal(sent.length, count + 1);
   assert.equal(messageText(sent.at(-1).data.messages[0]), '🛤️ 已經上車啦，目前順利回程中\n【預計於 17:54 抵達大湖】');
-  assert.equal(sent.at(-1).data.messages[0].contents.body.contents.at(-1).weight, 'bold');
+  assert.equal(sent.at(-1).data.messages[0].type, 'text');
   assert.deepEqual(sent.at(-1).data.messages[0].quickReply.items.map(x => x.action.label), ['知道', '去程', '回程']);
   const afterBoard = sent.length;
   await command('board-alias', '上車了'); await command('stop-text', '停止通知');

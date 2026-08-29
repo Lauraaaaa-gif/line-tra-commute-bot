@@ -60,7 +60,7 @@ export function arrivalText(result, train, instant = new Date(`${result.date}T${
 }
 
 const postback = (label, data) => ({ type: 'action', action: { type: 'postback', label, data, displayText: label } });
-export function textMessage(text, entry = null, { trip = null, acknowledge = false, bare = false, emphasizeLastLine = false, copy = staticCopyBook } = {}) {
+export function textMessage(text, entry = null, { trip = null, acknowledge = false, bare = false, copy = staticCopyBook } = {}) {
   let buttons = entry ? entry.result.trains.map((_, i) => postback(String(i + 1), `arrival:${entry.id}:${i + 1}`)) : [];
   if (trip) buttons = [
     postback(copy.text('buttonBoarded'), `trip:board:${trip.id}`),
@@ -72,25 +72,5 @@ export function textMessage(text, entry = null, { trip = null, acknowledge = fal
     type: 'action', action: { type: 'message', label: copy.text(key), text: command },
   })));
   const quickReply = { items: buttons };
-  const lines = text.split('\n');
-  const emphasized = lines.at(-1);
-  if (!emphasizeLastLine || !/^【.+】$/.test(emphasized || '')) {
-    return { type: 'text', text: text.slice(0, 5000), quickReply };
-  }
-  const normal = lines.slice(0, -1).join('\n').replace(/\n+$/, '');
-  return {
-    type: 'flex',
-    altText: text.slice(0, 1500),
-    contents: {
-      type: 'bubble',
-      body: {
-        type: 'box', layout: 'vertical', spacing: 'md',
-        contents: [
-          ...(normal ? [{ type: 'text', text: normal, wrap: true, size: 'md', color: '#111111' }] : []),
-          { type: 'text', text: emphasized, wrap: true, size: 'md', weight: 'bold', color: '#111111' },
-        ],
-      },
-    },
-    quickReply,
-  };
+  return { type: 'text', text: text.slice(0, 5000), quickReply };
 }

@@ -114,5 +114,5 @@ test('Durable Object 被移出記憶體後仍可從前一次列表選車', async
   const restored = new BotState(makeState(), env, { fetchImpl: fakeFetch, clock: () => now.getTime() });
   const select = { type: 'postback', webhookEventId: 'select', replyToken: 'reply-select', source, postback: { data } };
   assert.equal((await deliver(restored, select)).status, 200);
-  assert.match(sent[1].messages[0].altText, /已選擇區間車 3238/);
+  assert.match(sent[1].messages[0].text, /已選擇區間車 3238/);
 });
