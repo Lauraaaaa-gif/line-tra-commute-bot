@@ -5,6 +5,7 @@ import { SelectionStore } from '../src/selections.mjs';
 import { RealtimeService, scheduledView } from '../src/realtime.mjs';
 import { createBot } from '../src/bot.mjs';
 import { readConfig } from '../src/config.mjs';
+import { staticCopyBook } from '../src/copy-core.mjs';
 import { silentLogger } from '../fixtures/sample.mjs';
 
 const source = { type: 'user', userId: 'tracking-user' };
@@ -36,6 +37,52 @@ async function choose(s) { await s.send('query', '回程'); await s.send('select
 const labels = s => s.replies.at(-1).message.quickReply?.items.map(x => x.action.label);
 async function poll(s, minutes = 1) { s.advance(minutes * 60000); await s.bot.tracking.poll(async () => {}); }
 
+test('知道後可直接取消；完整取消追蹤指令可用，閒聊不會誤觸', async () => {
+  for (const mode of ['button', 'text']) {
+    const s = setup(); await choose(s);
+    await s.click('ack', 'ack:v1');
+    assert.deepEqual(labels(s), ['取消追蹤']);
+    const cancel = s.replies.at(-1).message.quickReply.items[0].action.data;
+    for (const text of ['我想取消追蹤', '取消追蹤一下', '不要取消追蹤']) await s.send(text, text);
+    assert.ok(s.bot.tracking.current(source));
+    if (mode === 'button') await s.click('cancel', cancel);
+    else await s.send('cancel', ' 取消追蹤 ');
+    assert.equal(s.bot.tracking.current(source), null);
+    await s.click('ack-again', 'ack:v1');
+    assert.equal(labels(s), undefined);
+    s.setDelay(12); await poll(s);
+    assert.equal(s.pushes.length, 0);
+  }
+});
+
+test('開始追蹤提示只用於有效選車或下一班，不出現在查詢及已到站班次', async () => {
+  const s = setup();
+  await s.send('query', '回程');
+  assert.doesNotMatch(replyText(s.replies.at(-1)), /已開始追蹤/);
+  await s.send('select', '1');
+  assert.match(replyText(s.replies.at(-1)), /已開始追蹤列車狀態/);
+  await s.send('miss', '沒搭上');
+  assert.match(replyText(s.replies.at(-1)), /已開始追蹤列車狀態/);
+  const expired = setup();
+  expired.setReached(true);
+  await choose(expired);
+  assert.equal(expired.bot.tracking.current(source), null);
+  assert.doesNotMatch(replyText(expired.replies.at(-1)), /已開始追蹤/);
+});
+
+test('知道後的取消按鈕綁定原班次，不能停止後來改選的車', async () => {
+  const s = setup(); await choose(s);
+  await s.click('ack', 'ack:v1');
+  const cancel = s.replies.at(-1).message.quickReply.items[0].action.data;
+  await s.send('miss', '沒搭上');
+  const next = s.bot.tracking.current(source);
+  await s.click('old-cancel', cancel);
+  assert.equal(s.bot.tracking.current(source), next);
+  s.advance(80 * 60000);
+  await s.click('expired-ack', 'ack:v1');
+  assert.equal(labels(s), undefined);
+});
+
 test('六種階段按鈕、知道不停止追蹤，以及完整停止指令', async () => {
   const s = setup();
   await s.send('start', '其他路線');
@@ -45,7 +92,7 @@ test('六種階段按鈕、知道不停止追蹤，以及完整停止指令', as
   await s.send('board', '搭上了');
   assert.deepEqual(labels(s), ['知道', '停止追蹤']);
   await s.click('ack', 'ack:v1');
-  assert.equal(labels(s), undefined);
+  assert.deepEqual(labels(s), ['取消追蹤']);
   assert.ok(s.bot.tracking.current(source));
   await s.send('miss', '沒搭上');
   assert.deepEqual(labels(s), ['知道', '去程', '回程', '其他路線', '停止追蹤']);
@@ -219,7 +266,7 @@ test('保留列表與選車格式；只在選車時估算抵達時間', async ()
   const s = setup(); await s.send('query', '回程');
   assert.equal(replyText(s.replies[0]), '🚆 新左營 → 大湖\n\n最近班次\n① 17:48　區間車 3238\n\n查詢日期：2026-08-29\n現在時間：17:42（台灣時間）');
   s.setDelay(7); await s.send('select', '1');
-  assert.equal(replyText(s.replies.at(-1)), '🚆 新左營 → 大湖\n已選擇區間車 3238\n\n預計於 17:48 於新左營上車\n【抵達大湖時間約 18:15】');
+  assert.equal(replyText(s.replies.at(-1)), '🚆 新左營 → 大湖\n已選擇區間車 3238\n\n預計於 17:48 於新左營上車\n【抵達大湖時間約 18:15】' + '\n\n' + staticCopyBook.text('trackingStarted'));
   assert.equal(s.replies.at(-1).message.type, 'text');
   assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '搭上了', '沒搭上', '停止追蹤']);
 });
@@ -228,7 +275,7 @@ test('沒搭上重查下一班，傳遞明確排除車次', async () => {
   const s = setup(); await choose(s); await s.send('miss', '沒搭上');
   assert.deepEqual(s.queries.at(-1).options.exclude, { number: '3238', departure: '17:48' });
   assert.equal(s.queries.length, 2);
-  assert.equal(replyText(s.replies.at(-1)), '💨 差一點點，這班沒搭上\n下一班約 18:26 從新左營出發\n【預計於 18:55 抵達大湖】');
+  assert.equal(replyText(s.replies.at(-1)), '💨 差一點點，這班沒搭上\n下一班約 18:26 從新左營出發\n【預計於 18:55 抵達大湖】' + '\n\n' + staticCopyBook.text('trackingStarted'));
   assert.equal(s.replies.at(-1).message.type, 'text');
   assert.equal(s.tracker.choice(source).train.number, '3242');
   assert.equal(s.tracker.choice(source).train.departure, '18:26');

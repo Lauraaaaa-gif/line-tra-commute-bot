@@ -174,7 +174,7 @@ test('群組成員共用列表；不同聊天室及私訊仍然隔離', async ()
   assert.equal(replies.length, beforeMissingUser);
 });
 
-test('群組所有人可查、選、搭上、没搭上與停止；知道標記實際成員且無按鈕', async () => {
+test('群組所有人可查、選、搭上、没搭上與停止；知道標記實際成員並保留取消按鈕', async () => {
   const { bot, replies } = selectable();
   const alice = { type: 'group', groupId: 'shared-group', userId: 'U' + 'a'.repeat(32) };
   const bob = { ...alice, userId: 'U' + 'b'.repeat(32) };
@@ -189,7 +189,7 @@ test('群組所有人可查、選、搭上、没搭上與停止；知道標記�
   await click('ack', 'ack:v1', bob);
   assert.equal(replies.at(-1).message.text, '{acknowledger} 已確認收到');
   assert.equal(replies.at(-1).message.substitution.acknowledger.mentionee.userId, bob.userId);
-  assert.equal(replies.at(-1).message.quickReply, undefined);
+  assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['取消追蹤']);
   const before = bot.tracking.current(alice).trip.id;
   await send('miss', '沒搭上', bob);
   assert.notEqual(bot.tracking.current(alice).trip.id, before);

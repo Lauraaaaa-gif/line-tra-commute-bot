@@ -143,3 +143,12 @@ Dockerfile 已提供，但未在此環境實際建置。單一實例的記憶體
 - 實際 LINE 手機收到新按鈕、真實列車誤點及帳號訊息額度，仍需使用者現場確認；未宣稱人工測試等同真實列車通知。
 
 主要修改：src/tracking.mjs 新增 DelayTracker.start/stop/poll；src/worker.mjs 新增 alarm/persist；src/line.mjs 新增具 retry key 的 push。src/bot.mjs、src/messages.mjs、src/journeys.mjs、src/selections.mjs、src/config.mjs 調整階段與群組共用狀態。copy.zh-TW.json、src/copy-core.mjs 更新可編輯文案；test 下六個既有測試檔及 scripts/smoke-worker.mjs 驗證新旧流程；README、文案及部署教學同步更新。
+
+
+## 2026-08-31：確認收到後可取消追蹤
+
+- 追蹤中的確認收到訊息保留單一「取消追蹤」按鈕，沿用原車次 postback；群組 mention 保留。沒有有效追蹤時不附按鈕。
+- 完整輸入「取消追蹤」等同「停止追蹤」，不接受模糊包含關鍵字的聊天。
+- 選車與成功改追下一班時附上 trackingStarted 文案，已到站或無有效班次不宣稱開始。
+- 112 項測試全部通過；文案、Workers dry-run、本機 workerd smoke 通過。實際 LINE 顯示仍待使用者確認。
+- 已部署版本：6f078bf7-ec97-49c2-b3a1-41897bb60549；/health HTTP 200。Secrets 未變更。

@@ -71,6 +71,8 @@
   "buttonAcknowledged": "知道",
   "missedTitle": "💨 差一點點，這班沒搭上",
   "buttonStopTracking": "停止追蹤",
+  "buttonCancelTracking": "取消追蹤",
+  "trackingStarted": "🔎 已開始追蹤列車狀態，誤點超過 4 分鐘及 9 分鐘時會各通知一次。\n可點「停止追蹤」或輸入「取消追蹤」結束追蹤。",
   "trackingStopped": "已停止這個班次的追蹤，不會再發送誤點通知。",
   "noTracking": "目前沒有這個班次的追蹤，可能已停止、抵達或改選其他班次。",
   "delayNotice": [

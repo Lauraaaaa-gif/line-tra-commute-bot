@@ -116,6 +116,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
               const view = await journeys.view(displayed, next, receivedAt);
               text = copy.text('missed', { ...tripVariables(displayed, next, view, receivedAt, copy), missedTitle: copy.text('missedTitle') });
               if (entry) trip = journeys.prepare(event.source, entry, next, view);
+              if (tracking.canStart(event.source, trip)) text += '\n\n' + copy.text('trackingStarted');
             } else if (missed) text = prefix + copy.text(result.customRoute ? 'noRouteTrains' : 'noTrains', result);
             else {
               text = timetableText(result, receivedAt, copy);
@@ -135,7 +136,9 @@ export function createBot({ config, trainService, lineClient, logger = console, 
         };
         if (acknowledged) {
           text = copy.text('acknowledged');
-          message = acknowledgementMessage(event.source, copy);
+          const current = tracking.current(event.source);
+          message = acknowledgementMessage(event.source, copy,
+            current && current.endAt > tracking.clock() ? current.trip : null);
         } else if (command === '去程' || command === '回程') {
           await lookup(command);
         } else if (command === '其他路線') {
@@ -153,6 +156,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             const view = await journeys.view(entry.result, selected.train, receivedAt);
             trip = journeys.prepare(event.source, entry, selected.train, view);
             text = arrivalText(entry.result, selected.train, receivedAt, view, copy);
+            if (tracking.canStart(event.source, trip)) text += '\n\n' + copy.text('trackingStarted');
             afterReply = () => { tracking.start(event.source, trip); journeys.remember(trip); };
           }
         } else if (tripAction?.action === 'stop' || command === '停止追蹤') {

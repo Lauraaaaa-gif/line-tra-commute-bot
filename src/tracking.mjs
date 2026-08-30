@@ -18,12 +18,17 @@ export class DelayTracker {
     const record = this.records.get(this.selections.owner(source));
     return record && (!id || record.trip.id === id) ? record : null;
   }
+  canStart(source, trip) {
+    const recipient = source?.type === 'group' ? source.groupId : source?.type === 'room' ? source.roomId
+      : source?.type === 'user' ? source.userId : null;
+    return Boolean(recipient && Number.isFinite(trip?.view?.etaAt) && trip.view.etaAt > this.clock() && !trip.view.reached);
+  }
   start(source, trip) {
     const recipient = source?.type === 'group' ? source.groupId : source?.type === 'room' ? source.roomId
       : source?.type === 'user' ? source.userId : null;
     const previous = this.records.get(trip.owner);
     this.records.delete(trip.owner);
-    if (!recipient || !Number.isFinite(trip.view.etaAt) || trip.view.etaAt <= this.clock() || trip.view.reached) return false;
+    if (!this.canStart(source, trip)) return false;
     const reuse = previous && sameTrain(previous.trip, trip);
     // Re-selecting the same active train must not reset delivered thresholds.
     const record = { trip, recipient,

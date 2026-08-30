@@ -184,9 +184,12 @@ test('Worker alarms：雲端持久追蹤、兩門檻通知、群組共用及停�
   assert.equal(s.pushes.length, 1);
   s.setDelay(10); s.advance(); await s.alarm();
   assert.equal(s.pushes.length, 2);
-  await s.send(null, 'ack:v1', bob);
+  s.restore();
+  const acknowledgement = await s.send(null, 'ack:v1', bob);
+  assert.deepEqual(acknowledgement.quickReply.items.map(x => x.action.label), ['取消追蹤']);
+  assert.equal(acknowledgement.substitution.acknowledger.mentionee.userId, bob.userId);
   assert.ok(s.stored.has('alarm'));
-  await s.send(null, selected.quickReply.items.at(-1).action.data, alice);
+  await s.send(null, acknowledgement.quickReply.items[0].action.data, alice);
   s.restore(); s.advance(); await s.alarm();
   assert.equal(s.pushes.length, 2);
   assert.equal(s.stored.has('alarm'), false);

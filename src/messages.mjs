@@ -5,6 +5,7 @@ import { scheduledView, trainTimes } from './realtime.mjs';
 export function parseCommand(text) {
   if (typeof text !== 'string') return null;
   const command = text.normalize('NFKC').trim();
+  if (command === '取消追蹤') return '停止追蹤';
   return ['去程', '回程', '其他路線', '說明', '已搭上', '搭上了', '沒搭上', '停止追蹤'].includes(command) ? command : null;
 }
 
@@ -22,10 +23,11 @@ export function parseAcknowledgement(data) {
 }
 
 // LINE 的 mention 只可用在群組／多人聊天室；私訊則使用不含標記的同一文案。
-export function acknowledgementMessage(source, copy = staticCopyBook) {
+export function acknowledgementMessage(source, copy = staticCopyBook, trip = null) {
   const text = copy.text('acknowledged');
+  const controls = trip ? { quickReply: { items: [postback(copy.text('buttonCancelTracking'), `trip:stop:${trip.id}`)] } } : {};
   if (!['group', 'room'].includes(source?.type) || typeof source.userId !== 'string' || !source.userId) {
-    return { type: 'text', text };
+    return { type: 'text', text, ...controls };
   }
   return {
     type: 'textV2',
@@ -33,6 +35,7 @@ export function acknowledgementMessage(source, copy = staticCopyBook) {
     substitution: {
       acknowledger: { type: 'mention', mentionee: { type: 'user', userId: source.userId } },
     },
+    ...controls,
   };
 }
 
