@@ -14,7 +14,7 @@ const replyText = reply => reply.message.altText ?? reply.message.text;
 function makeBot(overrides = {}) {
   const replies = [];
   const routes = [];
-  const bot = createBot({ config, logger: silentLogger,
+  const bot = createBot({ config, logger: silentLogger, selections: new SelectionStore({ clock: () => now.getTime() }),
     trainService: { async lookup(route, time) { routes.push({ route, time }); return { from: route.from, to: route.to, date: '2026-08-28', time: '17:42', trains: [] }; } },
     lineClient: { async reply(token, message) { replies.push({ token, message }); } },
     ...overrides,
@@ -155,7 +155,7 @@ test('未查詢、超出範圍、無效按鈕都安全提示', async () => {
   assert.equal(parseSelection('①').index, 1);
 });
 
-test('不同使用者與不同聊天室不共用列表或按鈕', async () => {
+test('群組成員共用列表；不同聊天室及私訊仍然隔離', async () => {
   const controller = 'U' + 'a'.repeat(32);
   const { bot, replies } = selectable({ config: { ...config, groupControllerUserId: controller } });
   const source = { type: 'group', groupId: 'group-a', userId: controller };
@@ -163,40 +163,44 @@ test('不同使用者與不同聊天室不共用列表或按鈕', async () => {
   const data = replies[0].message.quickReply.items[0].action.data;
   const count = replies.length;
   await bot.handleEvents([{ ...postback('family-control', data), source: { ...source, userId: 'U' + 'b'.repeat(32) } }], now);
-  assert.equal(replies.length, count);
+  assert.equal(replies.length, count + 1);
+  assert.match(replyText(replies.at(-1)), /已選擇/);
   await bot.handleEvents([{ ...postback('other-group', data), source: { ...source, groupId: 'group-b' } }], now);
   assert.match(replyText(replies.at(-1)), /重新查詢/);
   await bot.handleEvents([{ ...postback('direct', data), source: { type: 'user', userId: controller } }], now);
   assert.match(replyText(replies.at(-1)), /重新查詢/);
   const beforeMissingUser = replies.length;
-  await bot.handleEvents([{ ...postback('missing-user', data), source: { type: 'group', groupId: 'group-a' } }], now);
+  await bot.handleEvents([{ ...postback('missing-user', data), source: { type: 'group' } }], now);
   assert.equal(replies.length, beforeMissingUser);
 });
 
-test('群組只有設定的管理者能控制，所有成員都能按「知道」', async () => {
-  const controller = 'U' + 'a'.repeat(32);
-  const family = 'U' + 'b'.repeat(32);
-  const { bot, replies, routes } = selectable({ config: { ...config, groupControllerUserId: controller } });
-  const group = { type: 'group', groupId: 'group-a', userId: controller };
-  await bot.handleEvents([{ ...event('controller-query'), source: group }], now);
-  const selectData = replies.at(-1).message.quickReply.items[0].action.data;
-  await bot.handleEvents([{ ...postback('controller-select', selectData), source: group }], now);
-  const boardData = replies.at(-1).message.quickReply.items[0].action.data;
-  const beforeFamily = { replies: replies.length, routes: routes.length };
-  for (const [i, text] of ['回程', '1', '已搭上', '沒搭上', '其他路線', '新左營到路竹', '火車 台南 新左營'].entries()) {
-    await bot.handleEvents([{ ...event(`family-${i}`, text), source: { ...group, userId: family } }], now);
-  }
-  await bot.handleEvents([{ ...postback('family-board', boardData), source: { ...group, userId: family } }], now);
-  assert.deepEqual({ replies: replies.length, routes: routes.length }, beforeFamily);
-  await bot.handleEvents([{ ...postback('controller-board', boardData), source: group }], now);
-  assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程', '其他路線']);
-  await bot.handleEvents([{ ...postback('family-ack', 'ack:v1'), source: { ...group, userId: family } }], now);
-  assert.equal(replies.at(-1).message.type, 'textV2');
+test('群組所有人可查、選、搭上、没搭上與停止；知道標記實際成員且無按鈕', async () => {
+  const { bot, replies } = selectable();
+  const alice = { type: 'group', groupId: 'shared-group', userId: 'U' + 'a'.repeat(32) };
+  const bob = { ...alice, userId: 'U' + 'b'.repeat(32) };
+  const send = (id, text, source) => bot.handleEvents([{ ...event(id, text), source }], now);
+  const click = (id, data, source) => bot.handleEvents([{ ...postback(id, data), source }], now);
+  await send('query', '回程', alice);
+  await click('select', replies.at(-1).message.quickReply.items[0].action.data, bob);
+  assert.match(replyText(replies.at(-1)), /已選擇/);
+  const board = replies.at(-1).message.quickReply.items.find(x => x.action.label === '搭上了').action.data;
+  await click('board', board, alice);
+  assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '停止追蹤']);
+  await click('ack', 'ack:v1', bob);
   assert.equal(replies.at(-1).message.text, '{acknowledger} 已確認收到');
-  assert.deepEqual(replies.at(-1).message.substitution, {
-    acknowledger: { type: 'mention', mentionee: { type: 'user', userId: family } },
-  });
+  assert.equal(replies.at(-1).message.substitution.acknowledger.mentionee.userId, bob.userId);
   assert.equal(replies.at(-1).message.quickReply, undefined);
+  const before = bot.tracking.current(alice).trip.id;
+  await send('miss', '沒搭上', bob);
+  assert.notEqual(bot.tracking.current(alice).trip.id, before);
+  const stop = replies.at(-1).message.quickReply.items.at(-1).action.data;
+  await click('stop', stop, alice);
+  assert.equal(bot.tracking.current(bob), null);
+  assert.match(replyText(replies.at(-1)), /已停止/);
+  await send('other-route', '新左營到路竹', bob);
+  assert.match(replyText(replies.at(-1)), /路竹/);
+  await send('outbound', '去程', bob);
+  assert.match(replyText(replies.at(-1)), /大湖 → 新左營/);
 });
 
 test('列表到期、換日與容量淘汰後要求重查', async () => {

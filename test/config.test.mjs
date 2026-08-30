@@ -16,11 +16,11 @@ test('預設兩方向與三班，可設定預留分鐘與車種', () => {
   assert.equal(c.resultLimit, 3);
   assert.equal(c.minLeadMinutes, 5);
   assert.deepEqual(c.trainTypeCodes, ['6', '10']);
-  assert.equal(c.groupControllerUserId, userId);
+  assert.equal(c.groupControllerUserId, undefined);
 });
 
 test('拒絕非法埠、班次數、過長 timeout 與非法車種', () => {
-  for (const env of [{ PORT: '0' }, { RESULT_LIMIT: '100' }, { MIN_LEAD_MINUTES: '-1' }, { TDX_QUERY_TIMEOUT_MS: '60000' }, { TRAIN_TYPE_CODES: 'local' }, { GROUP_CONTROLLER_USER_ID: 'alice' }]) {
+  for (const env of [{ PORT: '0' }, { RESULT_LIMIT: '100' }, { MIN_LEAD_MINUTES: '-1' }, { TDX_QUERY_TIMEOUT_MS: '60000' }, { TRAIN_TYPE_CODES: 'local' }]) {
     assert.throws(() => readConfig(env, optional));
   }
 });

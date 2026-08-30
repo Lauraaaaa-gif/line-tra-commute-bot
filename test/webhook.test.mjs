@@ -105,7 +105,7 @@ test('LINE 回覆錯誤回傳非 2xx，允許 LINE Webhook redelivery', async t 
   assert.doesNotMatch(await response.text(), /sensitive/);
 });
 
-test('完整簽章 HTTP 選車即時估算保留，舊上車指令及按鈕不回覆、不推播', async t => {
+test('完整簽章 HTTP 選車即時估算保留，搭上與停止可用，非完整指令忽略', async t => {
   const delay = 6;
   const sent = [];
   const fakeFetch = async (input, init) => {
@@ -130,19 +130,20 @@ test('完整簽章 HTTP 選車即時估算保留，舊上車指令及按鈕不�
   };
   await command('query', '回程'); await command('select', '1');
   const selected = sent.at(-1).data.messages[0];
-  assert.deepEqual(selected.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '去程', '回程', '其他路線']);
+  assert.deepEqual(selected.quickReply.items.map(x => x.action.label), ['知道', '搭上了', '沒搭上', '停止追蹤']);
   assert.match(messageText(selected), /抵達大湖時間約 17:54/);
-  const oldId = selected.quickReply.items[0].action.data.split(':')[2];
+  const oldId = selected.quickReply.items.find(x => x.action.label === '搭上了').action.data.split(':')[2];
   const count = sent.length;
   assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: 'board', postback: { data: 'trip:board:' + oldId } }] }))).status, 200);
   assert.equal(sent.length, count + 1);
-  assert.equal(messageText(sent.at(-1).data.messages[0]), '🛤️ 已經上車啦，目前順利回程中\n【預計於 17:54 抵達大湖】');
+  assert.equal(messageText(sent.at(-1).data.messages[0]), '🛤️ 已經上車啦，目前順利回程中\n已開始追蹤列車狀態，誤點超過 4 分鐘及 9 分鐘時會通知。\n【預計於 17:54 抵達大湖】');
   assert.equal(sent.at(-1).data.messages[0].type, 'text');
-  assert.deepEqual(sent.at(-1).data.messages[0].quickReply.items.map(x => x.action.label), ['知道', '去程', '回程', '其他路線']);
+  assert.deepEqual(sent.at(-1).data.messages[0].quickReply.items.map(x => x.action.label), ['知道', '停止追蹤']);
   const afterBoard = sent.length;
   await command('board-alias', '上車了'); await command('stop-text', '停止通知');
   assert.equal((await post(JSON.stringify({ events: [{ ...event, type: 'postback', webhookEventId: 'stop', postback: { data: 'trip:stop:' + oldId } }] }))).status, 200);
-  assert.equal(sent.length, afterBoard);
+  assert.equal(sent.length, afterBoard + 1);
+  assert.match(messageText(sent.at(-1).data.messages[0]), /已停止/);
   assert.equal(sent.filter(x => x.path.endsWith('/push')).length, 0);
   bot.close();
 });

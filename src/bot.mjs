@@ -1,6 +1,7 @@
 import { acknowledgementMessage, arrivalText, errorText, helpText, parseAcknowledgement, parseCommand, parseRouteQuery, textMessage, timetableText, tripVariables } from './messages.mjs';
 import { SelectionStore, parseSelection, parseArrivalPostback } from './selections.mjs';
 import { JourneyChoices, parseTripAction } from './journeys.mjs';
+import { DelayTracker } from './tracking.mjs';
 import { staticCopyBook } from './copy-core.mjs';
 import { safeError, ServiceError } from './errors.mjs';
 
@@ -49,9 +50,10 @@ export class EventDeduplicator {
   }
 }
 
-export function createBot({ config, trainService, lineClient, logger = console, dedupe = new EventDeduplicator(), selections = new SelectionStore(), realtime, copy = staticCopyBook, journeys: injectedJourneys }) {
+export function createBot({ config, trainService, lineClient, logger = console, dedupe = new EventDeduplicator(), selections = new SelectionStore(), realtime, copy = staticCopyBook, journeys: injectedJourneys, tracking: injectedTracking }) {
   let active = 0;
-  const journeys = injectedJourneys || new JourneyChoices({ selections, realtime });
+  const journeys = injectedJourneys || new JourneyChoices({ selections, realtime, clock: selections.clock });
+  const tracking = injectedTracking || new DelayTracker({ selections, journeys, lineClient, clock: journeys.clock, copy, logger });
   const queues = new Map();
   const serial = (owner, work) => {
     if (!owner) return work();
@@ -69,7 +71,8 @@ export function createBot({ config, trainService, lineClient, logger = console, 
   async function processEvent(event, receivedAt) {
     if (event.mode === 'standby') return;
     const owner = selections.owner(event.source);
-    if (event.type === 'unfollow') return serial(owner, () => journeys.forget(event.source));
+    if (event.type === 'leave') return serial(owner, () => { tracking.stop(event.source); journeys.clearChoice(event.source); });
+    if (event.type === 'unfollow') return serial(owner, () => { tracking.stop(event.source); journeys.forget(event.source); });
     if (typeof event.replyToken !== 'string' || !event.replyToken) return;
     const isText = event.type === 'message' && event.message?.type === 'text';
     const selection = isText ? parseSelection(event.message.text)
@@ -78,13 +81,11 @@ export function createBot({ config, trainService, lineClient, logger = console, 
     const acknowledged = event.type === 'postback' && parseAcknowledgement(event.postback?.data);
     const command = isText ? parseCommand(event.message.text) : null;
     const routeQuery = isText && !command && !selection ? parseRouteQuery(event.message.text) : null;
-    const groupChat = event.source?.type === 'group' || event.source?.type === 'room';
-    const groupController = !groupChat || Boolean(config.groupControllerUserId) && event.source?.userId === config.groupControllerUserId;
     // 所有聊天室都只接受完整指令，不因關鍵字、閒聊或加入好友觸發。
-    if (!acknowledged && (!groupController || !command && !selection && !tripAction && !routeQuery)) {
+    if (!acknowledged && (!owner || !command && !selection && !tripAction && !routeQuery)) {
       // 僅記錄判斷結果，絕不寫出訊息內容、User ID、聊天室 ID 或 replyToken。
       logger.log('event_ignored', {
-        reason: !groupController ? 'GROUP_NOT_CONTROLLER' : 'UNRECOGNIZED_INPUT',
+        reason: !owner ? 'MISSING_SOURCE' : 'UNRECOGNIZED_INPUT',
         sourceType: event.source?.type || 'unknown',
         recognized: Boolean(command || selection || tripAction || routeQuery),
       });
@@ -99,10 +100,8 @@ export function createBot({ config, trainService, lineClient, logger = console, 
         let text;
         let entry = null;
         let trip = null;
-        let acknowledge = false;
-        let bare = false;
+        let stage;
         let message = null;
-        let emphasizeLastLine = false;
         let afterReply = () => {};
         const lookup = async (direction, missed = false, exclude = null, route = config.routes[direction]) => {
           const prefix = missed ? copy.text('missedTitle') + '\n' : '';
@@ -116,7 +115,6 @@ export function createBot({ config, trainService, lineClient, logger = console, 
               const next = displayed.trains[0];
               const view = await journeys.view(displayed, next, receivedAt);
               text = copy.text('missed', { ...tripVariables(displayed, next, view, receivedAt, copy), missedTitle: copy.text('missedTitle') });
-              emphasizeLastLine = true;
               if (entry) trip = journeys.prepare(event.source, entry, next, view);
             } else if (missed) text = prefix + copy.text(result.customRoute ? 'noRouteTrains' : 'noTrains', result);
             else {
@@ -132,7 +130,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
           afterReply = () => {
             selections.commit(entry, event.source, direction, receivedAt);
             journeys.clearChoice(event.source);
-            if (trip) journeys.remember(trip);
+            if (trip) { tracking.start(event.source, trip); journeys.remember(trip); }
           };
         };
         if (acknowledged) {
@@ -155,9 +153,12 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             const view = await journeys.view(entry.result, selected.train, receivedAt);
             trip = journeys.prepare(event.source, entry, selected.train, view);
             text = arrivalText(entry.result, selected.train, receivedAt, view, copy);
-            emphasizeLastLine = true;
-            afterReply = () => journeys.remember(trip);
+            afterReply = () => { tracking.start(event.source, trip); journeys.remember(trip); };
           }
+        } else if (tripAction?.action === 'stop' || command === '停止追蹤') {
+          const stopped = tracking.stop(event.source, tripAction?.id);
+          if (stopped) journeys.forget(event.source, tripAction?.id);
+          text = copy.text(stopped ? 'trackingStopped' : 'noTracking');
         } else if (tripAction?.action === 'board' || command === '已搭上' || command === '搭上了') {
           const boardedTrip = journeys.choice(event.source, tripAction?.id);
           if (!boardedTrip) {
@@ -167,28 +168,26 @@ export function createBot({ config, trainService, lineClient, logger = console, 
               ...tripVariables(boardedTrip.result, boardedTrip.train, boardedTrip.view, receivedAt, copy),
               direction: boardedTrip.command,
             });
-            acknowledge = true;
-            emphasizeLastLine = true;
-            trip = null;
-            afterReply = () => journeys.forget(event.source, boardedTrip.id);
+            stage = 'boarded';
+            trip = boardedTrip;
           }
         } else if (tripAction?.action === 'miss' || command === '沒搭上') {
           trip = journeys.choice(event.source, tripAction?.id);
           if (!trip) {
             text = copy.text('missingSelection');
           } else {
-            journeys.forget(event.source, trip.id);
+            tracking.stop(event.source, trip.id);
             const missedTrip = trip;
             trip = null;
             await lookup(missedTrip.command, true, { number: missedTrip.train.number, departure: missedTrip.train.departure },
               { from: missedTrip.result.from, to: missedTrip.result.to });
-            acknowledge = true;
+            stage = 'missed';
           }
         } else {
           text = helpText(config.routes, copy);
         }
         // 回覆成功才標記完成；LINE 失敗會回傳非 2xx，供 Webhook redelivery 重試。
-        await lineClient.reply(event.replyToken, message || textMessage(text, entry, { trip, acknowledge, bare, emphasizeLastLine, copy }));
+        await lineClient.reply(event.replyToken, message || textMessage(text, entry, { trip, stage, copy }));
         afterReply();
       } finally {
         active--;
@@ -197,7 +196,8 @@ export function createBot({ config, trainService, lineClient, logger = console, 
   }
 
   return {
-    close() { journeys.close(); },
+    tracking,
+    close() { tracking.clear(); journeys.close(); },
     async handleEvents(events, receivedAt) {
       // 同一封 webhook 可以包含多個使用者的事件，不能只處理第一筆。
       const settled = await Promise.allSettled(events.map(event => processEvent(event, receivedAt)));

@@ -13,10 +13,11 @@ export class SelectionStore {
   }
 
   owner(source) {
-    if (!source?.userId || !['user', 'group', 'room'].includes(source.type)) return null;
+    if (!source || !['user', 'group', 'room'].includes(source.type)) return null;
     const conversation = source.type === 'user' ? source.userId : source[`${source.type}Id`];
     if (!conversation) return null;
-    return createHmac('sha256', this.salt).update(JSON.stringify([source.type, conversation, source.userId])).digest('hex');
+    // All members share one journey in a group/room; private chats stay isolated.
+    return createHmac('sha256', this.salt).update(JSON.stringify([source.type, conversation])).digest('hex');
   }
 
   drop(id) {
@@ -66,7 +67,7 @@ export class SelectionStore {
   snapshot() {
     this.prune(new Date(this.clock()));
     return {
-      version: 1,
+      version: 2,
       salt: this.salt.toString('base64'),
       entries: [...this.entries],
       latest: [...this.latest],
@@ -74,7 +75,7 @@ export class SelectionStore {
   }
 
   restore(value) {
-    if (!value || value.version !== 1 || typeof value.salt !== 'string' || !Array.isArray(value.entries) || !Array.isArray(value.latest)) return false;
+    if (!value || value.version !== 2 || typeof value.salt !== 'string' || !Array.isArray(value.entries) || !Array.isArray(value.latest)) return false;
     const salt = Buffer.from(value.salt, 'base64');
     if (salt.length !== 32) return false;
     const entries = new Map(value.entries.filter(x => Array.isArray(x) && x.length === 2 && typeof x[0] === 'string'

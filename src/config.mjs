@@ -24,12 +24,6 @@ function station(env, key, fallback) {
   return value;
 }
 
-function optionalUserId(env, key) {
-  const value = env[key]?.trim() || '';
-  if (value && !/^U[0-9a-f]{32}$/.test(value)) throw new Error(`${key} 必須是 LINE User ID（U 加 32 位小寫十六進位字元）。`);
-  return value;
-}
-
 export function readConfig(env = process.env, { requireLine = true, requireTdx = true } = {}) {
   const required = [
     ...(requireLine ? ['LINE_CHANNEL_SECRET', 'LINE_CHANNEL_ACCESS_TOKEN'] : []),
@@ -57,7 +51,6 @@ export function readConfig(env = process.env, { requireLine = true, requireTdx =
     host: env.HOST?.trim() || '127.0.0.1',
     port: integer(env, 'PORT', 3000, 1, 65535),
     routes,
-    groupControllerUserId: optionalUserId(env, 'GROUP_CONTROLLER_USER_ID'),
     resultLimit: integer(env, 'RESULT_LIMIT', 3, 1, 10),
     minLeadMinutes: integer(env, 'MIN_LEAD_MINUTES', 0, 0, 120),
     trainTypeCodes,

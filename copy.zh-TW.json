@@ -6,9 +6,24 @@
   "noRouteTrains": "目前查不到「{from} → {to}」接下來的班次。",
   "sameStation": "⚠️ 起點與終點不能相同。",
   "unknownStation": "⚠️ 找不到車站「{station}」\n請確認車站名稱後重新輸入。",
-  "otherRoutesHelp": ["🔎 其他路線查詢", "", "直接輸入：", "「起點到終點」", "", "例如：", "新左營到路竹", "台南到新左營", "", "也可輸入：火車 新左營 路竹"],
+  "otherRoutesHelp": [
+    "🔎 其他路線查詢",
+    "",
+    "直接輸入：",
+    "「起點到終點」",
+    "",
+    "例如：",
+    "新左營到路竹",
+    "台南到新左營",
+    "",
+    "也可輸入：火車 新左營 路竹"
+  ],
   "buttonOtherRoutes": "其他路線",
-  "boardedOtherRoute": ["🛤️ 已經上車啦，目前前往{to}中", "【預計於 {etaDisplay} 抵達{to}】"],
+  "boardedOtherRoute": [
+    "🛤️ 已經上車啦，目前前往{to}中",
+    "已開始追蹤列車狀態，誤點超過 4 分鐘及 9 分鐘時會通知。",
+    "【預計於 {etaDisplay} 抵達{to}】"
+  ],
   "now": "現在時間：{time}（台灣時間）",
   "queryDate": "查詢日期：{date}",
   "listHint": "",
@@ -31,6 +46,7 @@
   ],
   "boarded": [
     "🛤️ 已經上車啦，目前順利{direction}中",
+    "已開始追蹤列車狀態，誤點超過 4 分鐘及 9 分鐘時會通知。",
     "【預計於 {etaDisplay} 抵達{to}】"
   ],
   "acknowledged": "已確認收到",
@@ -46,12 +62,22 @@
     "",
     "完整輸入「去程」或「回程」查詢，再輸入「1」「2」「3」選班次。",
     "選班後：「已搭上」確認乘車；「沒搭上」查詢下一班。",
-    "已取消誤點追蹤與主動通知。其他聊天文字不會觸發。"
+    "選車即開始追蹤誤點；輸入「停止追蹤」可取消。群組所有人都能操作，其他聊天文字不會觸發。"
   ],
   "buttonOutbound": "去程",
   "buttonReturn": "回程",
   "buttonBoarded": "搭上了",
   "buttonMissed": "沒搭上",
   "buttonAcknowledged": "知道",
-  "missedTitle": "💨 差一點點，這班沒搭上"
+  "missedTitle": "💨 差一點點，這班沒搭上",
+  "buttonStopTracking": "停止追蹤",
+  "trackingStopped": "已停止這個班次的追蹤，不會再發送誤點通知。",
+  "noTracking": "目前沒有這個班次的追蹤，可能已停止、抵達或改選其他班次。",
+  "delayNotice": [
+    "⚠️ 列車誤點更新",
+    "🚆 {from} → {to}",
+    "{type} {number} 目前誤點 {delay} 分鐘（超過 {threshold} 分鐘）",
+    "【預計於 {etaDisplay} 抵達{to}】",
+    "資料更新：{updated}。預估時間依表訂加誤點計算，請以車站公告為準。"
+  ]
 }

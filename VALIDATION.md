@@ -129,3 +129,17 @@
 TDX、LINE Token、公網 HTTPS 與官方 Verify 均已成功；使用者已確認實際去回程查詢能回覆。新增到達時間功能已完成自動化測試及官方格式驗證，仍請使用者確認新版 LINE 點選體驗。自動化 HTTP 串接測試中的上游回應仍為人工資料，與上方真實 API 實測分開記錄。公開服務依賴本機後端與 ngrok 持續執行，關機／休眠後不可用。
 
 Dockerfile 已提供，但未在此環境實際建置。單一實例的記憶體去重不保證跨重啟或多主機只處理一次；跨午夜列車範圍與其餘限制見 README。
+
+
+## 2026-08-31：群組共用行程、分階段按鈕及誤點追蹤
+
+- node --test：109 項通過，0 失敗，0 跳過。
+- copy:check 通過；Workers dry-run 打包通過。
+- scripts/smoke-worker.mjs：本機真正 workerd + SQLite transaction + alarm 觸發通過。所有 TDX/LINE 呼叫使用攔截的人工資料；確認兩門檻推播及不同群組成員停止追蹤，不使用真實金鑰。
+- 已部署 Worker 版本：f48af90f-20d2-446f-a1ed-07f3f8be30f1。
+- 部署後 /health：HTTP 200，ok=true。
+- 憑證掃描通過：發佈檔案沒有包含本機憑證值；.env、.runtime、.wrangler 未追蹤。沒有變更 Cloudflare Secrets。
+- 改用聊天室共用狀態，舊列表快照失效；使用者需重新查詢。
+- 實際 LINE 手機收到新按鈕、真實列車誤點及帳號訊息額度，仍需使用者現場確認；未宣稱人工測試等同真實列車通知。
+
+主要修改：src/tracking.mjs 新增 DelayTracker.start/stop/poll；src/worker.mjs 新增 alarm/persist；src/line.mjs 新增具 retry key 的 push。src/bot.mjs、src/messages.mjs、src/journeys.mjs、src/selections.mjs、src/config.mjs 調整階段與群組共用狀態。copy.zh-TW.json、src/copy-core.mjs 更新可編輯文案；test 下六個既有測試檔及 scripts/smoke-worker.mjs 驗證新旧流程；README、文案及部署教學同步更新。

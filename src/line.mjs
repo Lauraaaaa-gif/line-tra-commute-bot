@@ -25,4 +25,12 @@ export class LineClient {
     }, { fetchImpl: this.fetchImpl, timeoutMs: this.timeoutMs, service: 'LINE' });
   }
 
+  async push(to, message, retryKey) {
+    return requestJson('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json', 'X-Line-Retry-Key': retryKey },
+      body: JSON.stringify({ to, messages: [message] }),
+    }, { fetchImpl: this.fetchImpl, timeoutMs: this.timeoutMs, service: 'LINE', acceptRetryConflict: true });
+  }
+
 }

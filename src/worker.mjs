@@ -6,6 +6,7 @@ import { LineClient, verifySignature } from './line.mjs';
 import { createBot, EventDeduplicator } from './bot.mjs';
 import { SelectionStore } from './selections.mjs';
 import { JourneyChoices } from './journeys.mjs';
+import { DelayTracker } from './tracking.mjs';
 import { RealtimeService } from './realtime.mjs';
 import { StaticCopyBook } from './copy-core.mjs';
 import { safeError } from './errors.mjs';
@@ -97,26 +98,54 @@ export class BotState {
         cacheMs: config.timetableCacheMs, fetchImpl, clock });
       const realtime = new RealtimeService(tdx, { clock });
       const journeys = new JourneyChoices({ selections, realtime, clock });
+      const lineClient = new LineClient({ accessToken: config.lineAccessToken, timeoutMs: config.lineTimeoutMs, fetchImpl });
+      const tracking = new DelayTracker({ selections, journeys, lineClient, clock, copy });
       const snapshot = await state.storage.get('snapshot');
-      if (snapshot?.version === 1) {
+      // v2 shares group choices across members; old per-user group hashes cannot
+      // be migrated without retaining identities, so old lists must be queried again.
+      if (snapshot?.version === 2) {
         selections.restore(snapshot.selections);
-        journeys.restore(snapshot.journeys);
+        tracking.restore(snapshot.tracking);
+        journeys.restore(snapshot.journeys, new Set(tracking.records.keys()));
         dedupe.restore(snapshot.dedupe);
       }
       this.runtime = {
-        selections, journeys, dedupe,
+        selections, journeys, dedupe, tracking,
         bot: createBot({
           config,
           selections,
           journeys,
+          tracking,
           dedupe,
           realtime,
           copy,
           trainService: new TrainService(tdx, config),
-          lineClient: new LineClient({ accessToken: config.lineAccessToken, timeoutMs: config.lineTimeoutMs, fetchImpl }),
+          lineClient,
         }),
       };
     });
+  }
+
+  async persist() {
+    const { selections, journeys, dedupe, tracking } = this.runtime;
+    const snapshot = { version: 2, selections: selections.snapshot(), journeys: journeys.snapshot(new Set(tracking.records.keys())),
+      dedupe: dedupe.snapshot(), tracking: tracking.snapshot() };
+    const at = tracking.nextAlarm();
+    // Snapshot and wake-up must commit together, including before each push.
+    await this.state.storage.transaction(async tx => {
+      await tx.put('snapshot', snapshot);
+      if (at === null) await tx.deleteAlarm();
+      else await tx.setAlarm(at);
+    });
+  }
+
+  alarm() {
+    const work = this.tail.catch(() => {}).then(async () => {
+      await this.ready;
+      await this.runtime.tracking.poll(() => this.persist());
+    });
+    this.tail = work.then(() => {}, () => {});
+    return work;
   }
 
   fetch(request) {
@@ -129,15 +158,13 @@ export class BotState {
       if (!value?.event || !Number.isFinite(instant.getTime())) return json({ error: 'INVALID_EVENT' }, 400);
       try {
         await this.runtime.bot.handleEvents([value.event], instant);
-        await this.state.storage.put('snapshot', {
-          version: 1,
-          selections: this.runtime.selections.snapshot(),
-          journeys: this.runtime.journeys.snapshot(),
-          dedupe: this.runtime.dedupe.snapshot(),
-        });
+        await this.persist();
         return json({ ok: true });
       } catch (error) {
         console.error('bot_state_failed', safeError(error));
+        // In particular, stopping/missing must cancel notifications even when
+        // the acknowledgement reply fails; LINE may retry the event separately.
+        await this.persist();
         return json({ error: 'BOT_STATE_FAILED' }, 502);
       }
     });

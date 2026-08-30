@@ -26,14 +26,18 @@ test('文案檢查拒絕未知鍵、變數、超長按鈕及錯誤型態', () =>
   }
 });
 
-test('LINE 僅提供 reply；沒有 Push 介面', async () => {
+test('LINE reply 與 push 使用不同端點，保留相容的 redirect 處理', async () => {
   const calls = [];
   const line = new LineClient({ accessToken: 'test-token', fetchImpl: async (url, init) => {
     calls.push({ url, init }); return new Response('{}');
   } });
   const message = { type: 'text', text: 'test' };
   await line.reply('mock-reply', message);
-  assert.equal(line.push, undefined);
+  await line.push('mock-user', message, 'mock-retry-key');
+  assert.equal(calls[1].url, 'https://api.line.me/v2/bot/message/push');
+  assert.equal(calls[1].init.redirect, 'manual');
+  assert.equal(calls[1].init.headers['X-Line-Retry-Key'], 'mock-retry-key');
+  assert.deepEqual(JSON.parse(calls[1].init.body), { to: 'mock-user', messages: [message] });
   assert.equal(calls[0].url, 'https://api.line.me/v2/bot/message/reply');
   assert.deepEqual(JSON.parse(calls[0].init.body), { replyToken: 'mock-reply', messages: [message] });
 });
