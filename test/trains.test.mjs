@@ -1,12 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { taipeiTime, parseTime, upcomingTrains, TrainService } from '../src/trains.mjs';
-import { arrivalText, timetableText, parseCommand, textMessage } from '../src/messages.mjs';
+import { arrivalText, timetableText, parseCommand, parseRouteQuery, textMessage } from '../src/messages.mjs';
 import { readConfig } from '../src/config.mjs';
 import { train, sampleTrains } from '../fixtures/sample.mjs';
 
 const now = new Date('2026-08-28T17:42:00+08:00');
 const upcoming = (rows, options) => upcomingTrains(rows, '4340', '4290', now, options);
+
+test('其他路線解析兩種完整格式、空白與站字，拒絕不完整格式', () => {
+  for (const text of ['新左營到路竹', '新左營 到 路竹', '新左營 到路竹', '新左營到 路竹',
+    '　新左營到路竹　', '火車 新左營 路竹', '火車　新左營　路竹']) {
+    assert.deepEqual(parseRouteQuery(text), { from: '新左營', to: '路竹' }, text);
+  }
+  assert.deepEqual(parseRouteQuery('新左營站到路竹站'), { from: '新左營站', to: '路竹站' });
+  for (const text of [null, '', '去程', '回程', '回程選擇1', '火車 新左營', '火車 新左營 路竹 高雄',
+    '新左營到', '到路竹', '新左營 到 路竹 謝謝', '請問新左營到路竹？', 'A到B', '新左營\n到路竹']) {
+    assert.equal(parseRouteQuery(text), null, String(text));
+  }
+});
 
 test('台灣時間與 UTC 主機一致，午夜日期正確', () => {
   assert.deepEqual(taipeiTime(new Date('2026-08-28T16:00:00Z')), { date: '2026-08-29', time: '00:00', seconds: 0 });
@@ -89,7 +101,7 @@ test('僅完整指令，去除首尾空白，不接受別名或模糊比對', ()
   assert.equal(parseCommand('搭上了'), '搭上了');
   assert.equal(parseCommand('明天回程'), null);
   assert.equal(parseCommand(null), null);
-  assert.deepEqual(textMessage('test').quickReply.items.map(x => x.action.label), ['去程', '回程']);
+  assert.deepEqual(textMessage('test').quickReply.items.map(x => x.action.label), ['去程', '回程', '其他路線']);
 });
 
 test('目的站到站時間與跨日日期，不以目的站離站時間代替', () => {
@@ -104,9 +116,9 @@ test('目的站到站時間與跨日日期，不以目的站離站時間代替',
   }
 });
 
-test('最多十班按鈕加去回程，共十二個；不包含說明按鈕', () => {
+test('最多十班按鈕加去回程及其他路線，共十三個；不包含說明按鈕', () => {
   const message = textMessage('test', { id: 'abcdefghijklmnop', result: { trains: Array(10).fill({}) } });
-  assert.equal(message.quickReply.items.length, 12);
+  assert.equal(message.quickReply.items.length, 13);
   assert.equal(message.quickReply.items[9].action.data, 'arrival:abcdefghijklmnop:10');
   assert.equal(message.quickReply.items[0].action.label, '1');
   assert.ok(message.quickReply.items.every(x => x.action.label !== '說明'));

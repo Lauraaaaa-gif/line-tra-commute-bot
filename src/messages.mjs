@@ -5,7 +5,16 @@ import { scheduledView, trainTimes } from './realtime.mjs';
 export function parseCommand(text) {
   if (typeof text !== 'string') return null;
   const command = text.normalize('NFKC').trim();
-  return ['去程', '回程', '說明', '已搭上', '搭上了', '沒搭上'].includes(command) ? command : null;
+  return ['去程', '回程', '其他路線', '說明', '已搭上', '搭上了', '沒搭上'].includes(command) ? command : null;
+}
+
+// 僅接受完整格式，站名保留到 TDX 正規化，以便顯示原始輸入的錯誤站名。
+export function parseRouteQuery(text) {
+  if (typeof text !== 'string' || text.length > 100) return null;
+  const value = text.normalize('NFKC').trim();
+  const match = /^火車[ \t]+(\p{Script=Han}{1,30})[ \t]+(\p{Script=Han}{1,30})$/u.exec(value)
+    || /^(\p{Script=Han}{1,30}?)[ \t]*到[ \t]*(\p{Script=Han}{1,30})$/u.exec(value);
+  return match ? { from: match[1], to: match[2] } : null;
 }
 
 export function parseAcknowledgement(data) {
@@ -42,7 +51,7 @@ export function timetableText(result, instant = new Date(`${result.date}T${resul
       arrivalMinutes: Math.max(0, Math.ceil((times.arrivalAt - instant) / 60000)),
     }));
   }
-  if (!result.trains.length) lines.push(copy.text('noTrains'));
+  if (!result.trains.length) lines.push(copy.text(result.customRoute ? 'noRouteTrains' : 'noTrains', result));
   lines.push('', copy.text('queryDate', result), copy.text('now', current));
   const note = copy.text('scheduleNote');
   if (note) lines.push(note);
@@ -52,6 +61,10 @@ export function timetableText(result, instant = new Date(`${result.date}T${resul
 }
 
 export function errorText(error, copy = staticCopyBook) {
+  if (error.code === 'SAME_STATION') return copy.text('sameStation');
+  if (error.code === 'STATION_NOT_FOUND' && error.stationName) {
+    return copy.text('unknownStation', { station: error.stationName });
+  }
   return copy.text(['STATION_NOT_FOUND', 'SAME_STATION'].includes(error.code) ? 'stationError'
     : error.status === 429 ? 'rateLimit' : 'lookupError');
 }
@@ -83,7 +96,7 @@ export function textMessage(text, entry = null, { trip = null, acknowledge = fal
   ];
   if (acknowledge) buttons.push(postback(copy.text('buttonAcknowledged'), 'ack:v1'));
   if (bare) return { type: 'text', text: text.slice(0, 5000) };
-  buttons.push(...[['buttonOutbound', '去程'], ['buttonReturn', '回程']].map(([key, command]) => ({
+  buttons.push(...[['buttonOutbound', '去程'], ['buttonReturn', '回程'], ['buttonOtherRoutes', '其他路線']].map(([key, command]) => ({
     type: 'action', action: { type: 'message', label: copy.text(key), text: command },
   })));
   const quickReply = { items: buttons };

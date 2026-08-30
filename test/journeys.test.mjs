@@ -65,7 +65,7 @@ test('已搭上按鈕與完整指令回覆動態方向、抵達時間，不啟�
     else await s.send('board-text', '已搭上');
     assert.equal(replyText(s.replies.at(-1)), '🛤️ 已經上車啦，目前順利回程中\n【預計於 18:08 抵達大湖】');
     assert.equal(s.replies.at(-1).message.type, 'text');
-    assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程']);
+    assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程', '其他路線']);
     assert.deepEqual({ queries: s.queries.length, pushes: s.pushes.length }, before);
     assert.equal(s.tracker.choice(source), null);
   }
@@ -115,7 +115,7 @@ test('保留列表與選車格式；只在選車時估算抵達時間', async ()
   s.setDelay(7); await s.send('select', '1');
   assert.equal(replyText(s.replies.at(-1)), '🚆 新左營 → 大湖\n已選擇區間車 3238\n\n預計於 17:48 於新左營上車\n【抵達大湖時間約 18:15】');
   assert.equal(s.replies.at(-1).message.type, 'text');
-  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '去程', '回程']);
+  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '去程', '回程', '其他路線']);
 });
 
 test('沒搭上重查下一班，傳遞明確排除車次', async () => {
@@ -126,7 +126,7 @@ test('沒搭上重查下一班，傳遞明確排除車次', async () => {
   assert.equal(s.replies.at(-1).message.type, 'text');
   assert.equal(s.tracker.choice(source).train.number, '3242');
   assert.equal(s.tracker.choice(source).train.departure, '18:26');
-  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '知道', '去程', '回程']);
+  assert.deepEqual(s.replies.at(-1).message.quickReply.items.map(x => x.action.label), ['搭上了', '沒搭上', '知道', '去程', '回程', '其他路線']);
 });
 
 test('沒搭上後查無下一班或查詢失敗，不捏造出發／抵達時間', async () => {

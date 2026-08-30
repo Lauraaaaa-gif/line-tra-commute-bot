@@ -116,7 +116,7 @@ test('數字與按鈕顯示目的站到達時間，不增加 TDX 查詢；舊按
   await bot.handleEvents([event('list')], now);
   const firstButton = replies[0].message.quickReply.items[0].action;
   assert.equal(firstButton.type, 'postback');
-  assert.deepEqual(replies[0].message.quickReply.items.slice(-2).map(x => x.action.label), ['去程', '回程']);
+  assert.deepEqual(replies[0].message.quickReply.items.slice(-3).map(x => x.action.label), ['去程', '回程', '其他路線']);
   await bot.handleEvents([event('choose', '１')], now);
   assert.match(replyText(replies.at(-1)), /【抵達大湖時間約 18:08】/);
   assert.equal(lookups(), 1);
@@ -183,13 +183,13 @@ test('群組只有設定的管理者能控制，所有成員都能按「知道�
   await bot.handleEvents([{ ...postback('controller-select', selectData), source: group }], now);
   const boardData = replies.at(-1).message.quickReply.items[0].action.data;
   const beforeFamily = { replies: replies.length, routes: routes.length };
-  for (const [i, text] of ['回程', '1', '已搭上', '沒搭上'].entries()) {
+  for (const [i, text] of ['回程', '1', '已搭上', '沒搭上', '其他路線', '新左營到路竹', '火車 台南 新左營'].entries()) {
     await bot.handleEvents([{ ...event(`family-${i}`, text), source: { ...group, userId: family } }], now);
   }
   await bot.handleEvents([{ ...postback('family-board', boardData), source: { ...group, userId: family } }], now);
   assert.deepEqual({ replies: replies.length, routes: routes.length }, beforeFamily);
   await bot.handleEvents([{ ...postback('controller-board', boardData), source: group }], now);
-  assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程']);
+  assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '去程', '回程', '其他路線']);
   await bot.handleEvents([{ ...postback('family-ack', 'ack:v1'), source: { ...group, userId: family } }], now);
   assert.equal(replies.at(-1).message.type, 'textV2');
   assert.equal(replies.at(-1).message.text, '{acknowledger} 已確認收到');

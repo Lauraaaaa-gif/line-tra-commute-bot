@@ -6,10 +6,137 @@ import { SelectionStore } from '../src/selections.mjs';
 import { JourneyChoices } from '../src/journeys.mjs';
 import { EventDeduplicator } from '../src/bot.mjs';
 import { scheduledView } from '../src/realtime.mjs';
-import { sampleTrains, stations, reply } from '../fixtures/sample.mjs';
+import { train, sampleTrains, stations, reply } from '../fixtures/sample.mjs';
 
 const secret = 'worker-signature-secret';
 const sign = raw => createHmac('sha256', secret).update(raw).digest('base64');
+
+// 人工車站與班表，僅攔截 TDX／LINE 傳輸；其餘使用正式 Worker 業務流程。
+function routeWorker({ empty = false, failure = false } = {}) {
+  const now = new Date('2026-08-28T17:42:00+08:00');
+  const stored = new Map(), sent = [], calls = [];
+  const routeStations = [...stations, ...[['9001', '路竹'], ['9002', '臺南'], ['9003', '岡山'], ['9004', '高雄']]
+    .map(([StationID, name]) => ({ StationID, StationName: { Zh_tw: name } }))];
+  const fakeFetch = async (input, init) => {
+    const url = new URL(input);
+    assert.equal(init.redirect, 'manual');
+    calls.push(url.pathname);
+    if (url.hostname === 'api.line.me') { sent.push(JSON.parse(init.body).messages[0]); return reply({}); }
+    if (url.pathname.endsWith('/token')) return reply({ access_token: 'fake-token', expires_in: 3600 });
+    if (url.pathname.endsWith('/Station')) return reply({ Stations: routeStations, Count: routeStations.length });
+    if (url.pathname.includes('/TrainLiveBoard/')) return reply({ TrainLiveBoards: [] });
+    const match = /\/OD\/(\d{4})\/to\/(\d{4})\/2026-08-28$/.exec(url.pathname);
+    assert.ok(match, url.pathname);
+    if (failure) return reply({}, 503);
+    const rows = empty ? [] : [
+      train('9004', '18:40', { from: match[1], to: match[2], arrival: '19:00' }),
+      train('9000', '17:30', { from: match[1], to: match[2], arrival: '17:50' }),
+      train('9001', '17:48', { from: match[1], to: match[2], arrival: '18:08' }),
+      train('9002', '18:02', { from: match[1], to: match[2], arrival: '18:22' }),
+      train('9003', '18:16', { from: match[1], to: match[2], arrival: '18:36' }),
+    ];
+    return reply({ TrainDate: '2026-08-28', TrainTimetables: rows, Count: rows.length });
+  };
+  const makeObject = () => new BotState({
+    storage: {
+      async get(key) { return structuredClone(stored.get(key)); },
+      async put(key, value) { stored.set(key, structuredClone(value)); },
+    },
+    blockConcurrencyWhile(work) { return work(); },
+  }, {
+    LINE_CHANNEL_SECRET: 'test-secret', LINE_CHANNEL_ACCESS_TOKEN: 'test-token',
+    TDX_CLIENT_ID: 'test-client', TDX_CLIENT_SECRET: 'test-client-secret',
+  }, { fetchImpl: fakeFetch, clock: () => now.getTime() });
+  let object = makeObject(), sequence = 0;
+  return {
+    calls, sent,
+    restore() { object = makeObject(); },
+    async send(text, data) {
+      sequence++;
+      const event = { type: data ? 'postback' : 'message', webhookEventId: String(sequence), replyToken: String(sequence),
+        source: { type: 'user', userId: 'U' + 'a'.repeat(32) },
+        ...(data ? { postback: { data } } : { message: { type: 'text', text } }),
+      };
+      const response = await object.fetch(new Request('https://bot-state.internal/event', {
+        method: 'POST', body: JSON.stringify({ event, receivedAt: now.toISOString() }),
+      }));
+      assert.equal(response.status, 200);
+      return sent.at(-1);
+    },
+  };
+}
+
+test('固定去回程與中文其他路線均通過 TDX 車站查找、排序、LINE 回覆', async t => {
+  for (const [input, from, to, fromId, toId] of [
+    ['去程', '大湖', '新左營', '4290', '4340'],
+    ['回程', '新左營', '大湖', '4340', '4290'],
+    ['新左營到路竹', '新左營', '路竹', '4340', '9001'],
+    ['新左營站到路竹站', '新左營', '路竹', '4340', '9001'],
+    ['火車 新左營 路竹', '新左營', '路竹', '4340', '9001'],
+    ['台南到新左營', '臺南', '新左營', '9002', '4340'],
+    ['岡山到高雄', '岡山', '高雄', '9003', '9004'],
+  ]) await t.test(input, async () => {
+    const s = routeWorker();
+    const message = await s.send(input);
+    assert.equal(message.type, 'text');
+    assert.ok(message.text.startsWith('🚆 ' + from + ' → ' + to));
+    assert.match(message.text, /① 17:48　區間車 9001/);
+    assert.match(message.text, /③ 18:16　區間車 9003/);
+    assert.doesNotMatch(message.text, /9000|9004|④/);
+    assert.ok(s.calls.some(path => path.endsWith('/OD/' + fromId + '/to/' + toId + '/2026-08-28')));
+    const selected = await s.send('1');
+    assert.ok(selected.text.includes('抵達' + to + '時間約 18:08'));
+  });
+});
+
+test('其他路線：未知站、重複站字、同站、空班表及上游失敗皆正常回覆', async t => {
+  for (const [input, options, expected, noNetwork] of [
+    ['新左營到路竹站站', {}, '⚠️ 找不到車站「路竹站站」\n請確認車站名稱後重新輸入。', false],
+    ['不存在到路竹', {}, '⚠️ 找不到車站「不存在」\n請確認車站名稱後重新輸入。', false],
+    ['新左營到新左營', {}, '⚠️ 起點與終點不能相同。', true],
+    ['台南站到臺南', {}, '⚠️ 起點與終點不能相同。', true],
+    ['新左營到路竹', { empty: true }, '目前查不到「新左營 → 路竹」接下來的班次。', false],
+    ['新左營到路竹', { failure: true }, '目前無法取得台鐵時刻資料', false],
+  ]) await t.test(input + JSON.stringify(options), async () => {
+    const s = routeWorker(options);
+    const message = await s.send(input);
+    assert.ok(message.text.includes(expected));
+    if (noNetwork) assert.equal(s.calls.filter(path => !path.includes('/message/reply')).length, 0);
+    if (!options.empty && !options.failure) assert.equal(s.calls.filter(path => path.includes('/OD/')).length, 0);
+    assert.ok(message.quickReply.items.every(item => !item.action.data?.startsWith('arrival:')));
+    assert.match((await s.send('1')).text, /重新查詢/);
+  });
+});
+
+test('其他路線保留舊列表、重啟後沒搭上查原路線及搭上了；不啟動推播', async () => {
+  const s = routeWorker();
+  const first = await s.send('新左營到路竹');
+  const selectData = first.quickReply.items[0].action.data;
+  await s.send('回程');
+  s.restore();
+  assert.match((await s.send(null, selectData)).text, /抵達路竹時間約 18:08/);
+  s.restore();
+  const missed = await s.send('沒搭上');
+  assert.match(missed.text, /下一班約 18:02 從新左營出發/);
+  assert.match(missed.text, /18:22 抵達路竹/);
+  assert.match(s.calls.filter(path => path.includes('/OD/')).at(-1), /\/4340\/to\/9001\//);
+  s.restore();
+  const boarded = await s.send(null, missed.quickReply.items[0].action.data);
+  assert.match(boarded.text, /前往路竹中/);
+  assert.match(boarded.text, /18:22 抵達路竹/);
+  assert.equal(s.calls.filter(path => path.endsWith('/push')).length, 0);
+});
+
+test('其他路線說明不查 TDX、不清除已選車次；查不到班次會清除舊數字對應', async () => {
+  const s = routeWorker();
+  await s.send('新左營到路竹');
+  const calls = s.calls.length;
+  assert.match((await s.send('其他路線')).text, /🔎 其他路線查詢/);
+  assert.equal(s.calls.length, calls + 1);
+  assert.match((await s.send('1')).text, /抵達路竹/);
+  await s.send('新左營到路竹站站');
+  assert.match((await s.send('1')).text, /重新查詢/);
+});
 
 function request(path, body, headers = {}) {
   return new Request(`https://example.workers.dev${path}`, {

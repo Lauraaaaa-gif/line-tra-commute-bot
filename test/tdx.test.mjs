@@ -143,3 +143,22 @@ test('錯誤的 token 格式不能快取為有效憑證', async () => {
   const tdx = client({ fetchImpl: async () => reply({ access_token: '', expires_in: 0 }) });
   await assert.rejects(tdx.getToken(), /TDX_INVALID_TOKEN/);
 });
+
+test('TDX 車站索引涵蓋動態清單、一天快取與保留原始錯誤站名', async () => {
+  let clock = 0, stationCalls = 0;
+  const rows = [...stations, { StationID: '9001', StationName: { Zh_tw: '路竹' } }];
+  const tdx = client({ clock: () => clock, fetchImpl: async url => {
+    if (isToken(url)) return tokenResponse();
+    stationCalls++;
+    return reply({ Stations: rows, Count: rows.length });
+  } });
+  assert.equal((await tdx.resolveStations('新左營站', '路竹站')).to.id, '9001');
+  await tdx.resolveStations('大湖', '路竹');
+  assert.equal(stationCalls, 1);
+  await assert.rejects(tdx.resolveStations('新左營', '路竹站站'), error =>
+    error.code === 'STATION_NOT_FOUND' && error.stationName === '路竹站站');
+  clock = 86400001;
+  rows.push({ StationID: '9002', StationName: { Zh_tw: '測試新站' } });
+  assert.equal((await tdx.resolveStations('測試新站', '路竹')).from.id, '9002');
+  assert.equal(stationCalls, 2);
+});

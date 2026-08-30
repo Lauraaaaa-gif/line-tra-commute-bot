@@ -1,4 +1,4 @@
-import { acknowledgementMessage, arrivalText, errorText, helpText, parseAcknowledgement, parseCommand, textMessage, timetableText, tripVariables } from './messages.mjs';
+import { acknowledgementMessage, arrivalText, errorText, helpText, parseAcknowledgement, parseCommand, parseRouteQuery, textMessage, timetableText, tripVariables } from './messages.mjs';
 import { SelectionStore, parseSelection, parseArrivalPostback } from './selections.mjs';
 import { JourneyChoices, parseTripAction } from './journeys.mjs';
 import { staticCopyBook } from './copy-core.mjs';
@@ -77,15 +77,16 @@ export function createBot({ config, trainService, lineClient, logger = console, 
     const tripAction = event.type === 'postback' ? parseTripAction(event.postback?.data) : null;
     const acknowledged = event.type === 'postback' && parseAcknowledgement(event.postback?.data);
     const command = isText ? parseCommand(event.message.text) : null;
+    const routeQuery = isText && !command && !selection ? parseRouteQuery(event.message.text) : null;
     const groupChat = event.source?.type === 'group' || event.source?.type === 'room';
     const groupController = !groupChat || Boolean(config.groupControllerUserId) && event.source?.userId === config.groupControllerUserId;
     // 所有聊天室都只接受完整指令，不因關鍵字、閒聊或加入好友觸發。
-    if (!acknowledged && (!groupController || !command && !selection && !tripAction)) {
+    if (!acknowledged && (!groupController || !command && !selection && !tripAction && !routeQuery)) {
       // 僅記錄判斷結果，絕不寫出訊息內容、User ID、聊天室 ID 或 replyToken。
       logger.log('event_ignored', {
         reason: !groupController ? 'GROUP_NOT_CONTROLLER' : 'UNRECOGNIZED_INPUT',
         sourceType: event.source?.type || 'unknown',
-        recognized: Boolean(command || selection || tripAction),
+        recognized: Boolean(command || selection || tripAction || routeQuery),
       });
       return;
     }
@@ -103,10 +104,11 @@ export function createBot({ config, trainService, lineClient, logger = console, 
         let message = null;
         let emphasizeLastLine = false;
         let afterReply = () => {};
-        const lookup = async (direction, missed = false, exclude = null) => {
+        const lookup = async (direction, missed = false, exclude = null, route = config.routes[direction]) => {
           const prefix = missed ? copy.text('missedTitle') + '\n' : '';
           try {
-            const result = await trainService.lookup(config.routes[direction], receivedAt, { exclude });
+            const result = { ...await trainService.lookup(route, receivedAt, { exclude }) };
+            if (!Object.hasOwn(config.routes, direction)) result.customRoute = true;
             // 沒搭上只顯示下一班，數字與乘車按鈕也只對應這一班。
             const displayed = missed ? { ...result, trains: result.trains.slice(0, 1) } : result;
             entry = selections.prepare(event.source, direction, displayed);
@@ -116,7 +118,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
               text = copy.text('missed', { ...tripVariables(displayed, next, view, receivedAt, copy), missedTitle: copy.text('missedTitle') });
               emphasizeLastLine = true;
               if (entry) trip = journeys.prepare(event.source, entry, next, view);
-            } else if (missed) text = prefix + copy.text('noTrains');
+            } else if (missed) text = prefix + copy.text(result.customRoute ? 'noRouteTrains' : 'noTrains', result);
             else {
               text = timetableText(result, receivedAt, copy);
               const hint = copy.text('listHint', { count: result.trains.length });
@@ -138,6 +140,10 @@ export function createBot({ config, trainService, lineClient, logger = console, 
           message = acknowledgementMessage(event.source, copy);
         } else if (command === '去程' || command === '回程') {
           await lookup(command);
+        } else if (command === '其他路線') {
+          text = copy.text('otherRoutesHelp');
+        } else if (routeQuery) {
+          await lookup(`${routeQuery.from} → ${routeQuery.to}`, false, null, routeQuery);
         } else if (selection) {
           const selected = selections.select(event.source, selection, receivedAt);
           entry = selected.entry || null;
@@ -157,7 +163,7 @@ export function createBot({ config, trainService, lineClient, logger = console, 
           if (!boardedTrip) {
             text = copy.text('missingSelection');
           } else {
-            text = copy.text('boarded', {
+            text = copy.text(boardedTrip.result.customRoute ? 'boardedOtherRoute' : 'boarded', {
               ...tripVariables(boardedTrip.result, boardedTrip.train, boardedTrip.view, receivedAt, copy),
               direction: boardedTrip.command,
             });
@@ -174,7 +180,8 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             journeys.forget(event.source, trip.id);
             const missedTrip = trip;
             trip = null;
-            await lookup(missedTrip.command, true, { number: missedTrip.train.number, departure: missedTrip.train.departure });
+            await lookup(missedTrip.command, true, { number: missedTrip.train.number, departure: missedTrip.train.departure },
+              { from: missedTrip.result.from, to: missedTrip.result.to });
             acknowledge = true;
           }
         } else {

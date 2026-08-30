@@ -3,6 +3,12 @@ export const defaultCopy = {
   listTitle: '最近班次',
   trainRow: '{index} {departure}　{type} {number}',
   noTrains: '今天此時間之後，查無符合條件的班次。',
+  noRouteTrains: '目前查不到「{from} → {to}」接下來的班次。',
+  sameStation: '⚠️ 起點與終點不能相同。',
+  unknownStation: '⚠️ 找不到車站「{station}」\n請確認車站名稱後重新輸入。',
+  otherRoutesHelp: ['🔎 其他路線查詢', '', '直接輸入：', '「起點到終點」', '', '例如：', '新左營到路竹', '台南到新左營', '', '也可輸入：火車 新左營 路竹'],
+  buttonOtherRoutes: '其他路線',
+  boardedOtherRoute: ['🛤️ 已經上車啦，目前前往{to}中', '【預計於 {etaDisplay} 抵達{to}】'],
   now: '現在時間：{time}（台灣時間）',
   queryDate: '查詢日期：{date}',
   listHint: '',
@@ -25,7 +31,7 @@ export const defaultCopy = {
   buttonOutbound: '去程', buttonReturn: '回程', buttonBoarded: '搭上了', buttonMissed: '沒搭上', buttonAcknowledged: '知道',
 };
 
-const variables = new Set(['from', 'to', 'index', 'departure', 'type', 'number', 'departureMinutes', 'arrival', 'arrivalMinutes', 'time', 'date', 'count', 'arrivalDate', 'etaLine', 'liveLine', 'etaDate', 'eta', 'remaining', 'delay', 'updated', 'interval', 'threshold', 'reason', 'outboundFrom', 'outboundTo', 'returnFrom', 'returnTo', 'etaDisplay', 'etaShort', 'direction', 'missedTitle']);
+const variables = new Set(['station', 'from', 'to', 'index', 'departure', 'type', 'number', 'departureMinutes', 'arrival', 'arrivalMinutes', 'time', 'date', 'count', 'arrivalDate', 'etaLine', 'liveLine', 'etaDate', 'eta', 'remaining', 'delay', 'updated', 'interval', 'threshold', 'reason', 'outboundFrom', 'outboundTo', 'returnFrom', 'returnTo', 'etaDisplay', 'etaShort', 'direction', 'missedTitle']);
 
 export function validateCopy(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('COPY_INVALID');

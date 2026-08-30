@@ -1,4 +1,5 @@
 import { ServiceError } from './errors.mjs';
+import { normalizeStationName } from './tdx.mjs';
 
 const taipeiFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -77,6 +78,7 @@ export class TrainService {
   }
 
   async lookup(route, instant, { exclude = null } = {}) {
+    if (normalizeStationName(route.from) === normalizeStationName(route.to)) throw new ServiceError('SAME_STATION');
     const signal = AbortSignal.timeout(this.config.tdxTimeoutMs);
     const current = taipeiTime(instant);
     const { from, to } = await this.tdx.resolveStations(route.from, route.to, signal);

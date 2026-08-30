@@ -92,11 +92,23 @@ export class TdxClient {
     if (!this.stations || this.stations.expiresAt <= this.clock()) {
       const result = await this.allPages('/Station', 'Stations', signal);
       if (!result.items.length) throw new ServiceError('TDX_INVALID_STATIONS');
-      this.stations = { value: result.items, expiresAt: this.clock() + 86400000 };
+      const index = new Map();
+      for (const station of result.items) {
+        if (typeof station?.StationName?.Zh_tw !== 'string') continue;
+        const key = normalizeStationName(station.StationName.Zh_tw);
+        const matches = index.get(key) || [];
+        matches.push(station);
+        index.set(key, matches);
+      }
+      this.stations = { index, expiresAt: this.clock() + 86400000 };
     }
     const find = name => {
-      const matches = this.stations.value.filter(s => s && normalizeStationName(s.StationName?.Zh_tw || '') === normalizeStationName(name));
-      if (matches.length !== 1 || !/^\d{4}$/.test(matches[0].StationID)) throw new ServiceError('STATION_NOT_FOUND');
+      const matches = this.stations.index.get(normalizeStationName(name)) || [];
+      if (matches.length !== 1 || !/^\d{4}$/.test(matches[0].StationID)) {
+        const error = new ServiceError('STATION_NOT_FOUND');
+        error.stationName = String(name).trim().slice(0, 30);
+        throw error;
+      }
       return { id: matches[0].StationID, name: matches[0].StationName.Zh_tw };
     };
     const from = find(fromName);
