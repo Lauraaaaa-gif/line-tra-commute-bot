@@ -156,25 +156,12 @@ export function createBot({ config, trainService, lineClient, logger = console, 
             const view = await journeys.view(entry.result, selected.train, receivedAt);
             trip = journeys.prepare(event.source, entry, selected.train, view);
             text = arrivalText(entry.result, selected.train, receivedAt, view, copy);
-            if (tracking.canStart(event.source, trip)) text += '\n\n' + copy.text('trackingStarted');
             afterReply = () => { tracking.start(event.source, trip); journeys.remember(trip); };
           }
         } else if (tripAction?.action === 'stop' || command === '停止追蹤') {
           const stopped = tracking.stop(event.source, tripAction?.id);
           if (stopped) journeys.forget(event.source, tripAction?.id);
           text = copy.text(stopped ? 'trackingStopped' : 'noTracking');
-        } else if (tripAction?.action === 'board' || command === '已搭上' || command === '搭上了') {
-          const boardedTrip = journeys.choice(event.source, tripAction?.id);
-          if (!boardedTrip) {
-            text = copy.text('missingSelection');
-          } else {
-            text = copy.text(boardedTrip.result.customRoute ? 'boardedOtherRoute' : 'boarded', {
-              ...tripVariables(boardedTrip.result, boardedTrip.train, boardedTrip.view, receivedAt, copy),
-              direction: boardedTrip.command,
-            });
-            stage = 'boarded';
-            trip = boardedTrip;
-          }
         } else if (tripAction?.action === 'miss' || command === '沒搭上') {
           trip = journeys.choice(event.source, tripAction?.id);
           if (!trip) {

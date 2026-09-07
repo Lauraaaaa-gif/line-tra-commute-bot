@@ -19,11 +19,6 @@ export const defaultCopy = {
     "也可輸入：火車 新左營 路竹"
   ],
   "buttonOtherRoutes": "其他路線",
-  "boardedOtherRoute": [
-    "🛤️ 已經上車啦，目前前往{to}中",
-    "已開始追蹤列車狀態，誤點超過 4 分鐘及 9 分鐘時會通知。",
-    "【預計於 {etaDisplay} 抵達{to}】"
-  ],
   "now": "現在時間：{time}（台灣時間）",
   "queryDate": "查詢日期：{date}",
   "listHint": "",
@@ -32,8 +27,8 @@ export const defaultCopy = {
     "🚆 {from} → {to}",
     "已選擇{type} {number}",
     "",
-    "預計於 {departure} 於{from}上車",
-    "【抵達{to}時間約 {etaShort}】"
+    "於{from}上車時間  {departure}",
+    "【預計抵達{to}時間 {etaShort}】"
   ],
   "eta": "估計 {etaDate} {eta} 抵達{to}，約 {remaining} 分鐘後。",
   "etaPassed": "表訂／估計到達時間已過，無法據此確認實際抵達。",
@@ -42,11 +37,6 @@ export const defaultCopy = {
   "missed": [
     "{missedTitle}",
     "下一班約 {departure} 從{from}出發",
-    "【預計於 {etaDisplay} 抵達{to}】"
-  ],
-  "boarded": [
-    "🛤️ 已經上車啦，目前順利{direction}中",
-    "已開始追蹤列車狀態，誤點超過 4 分鐘及 9 分鐘時會通知。",
     "【預計於 {etaDisplay} 抵達{to}】"
   ],
   "acknowledged": "已確認收到",
@@ -61,12 +51,11 @@ export const defaultCopy = {
     "回程：{returnFrom} → {returnTo}",
     "",
     "完整輸入「去程」或「回程」查詢，再輸入「1」「2」「3」選班次。",
-    "選班後：「已搭上」確認乘車；「沒搭上」查詢下一班。",
+    "選班後：「沒搭上」查詢下一班；「停止追蹤／取消追蹤」可取消。",
     "選車即開始追蹤誤點；輸入「停止追蹤」可取消。群組所有人都能操作，其他聊天文字不會觸發。"
   ],
   "buttonOutbound": "去程",
   "buttonReturn": "回程",
-  "buttonBoarded": "搭上了",
   "buttonMissed": "沒搭上",
   "buttonAcknowledged": "知道",
   "missedTitle": "💨 差一點點，這班沒搭上",

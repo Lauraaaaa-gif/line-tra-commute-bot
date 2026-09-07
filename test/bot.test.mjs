@@ -118,7 +118,7 @@ test('數字與按鈕顯示目的站到達時間，不增加 TDX 查詢；舊按
   assert.equal(firstButton.type, 'postback');
   assert.deepEqual(replies[0].message.quickReply.items.slice(-3).map(x => x.action.label), ['去程', '回程', '其他路線']);
   await bot.handleEvents([event('choose', '１')], now);
-  assert.match(replyText(replies.at(-1)), /【抵達大湖時間約 18:08】/);
+  assert.match(replyText(replies.at(-1)), /【預計抵達大湖時間 18:08】/);
   assert.equal(lookups(), 1);
   await bot.handleEvents([event('other', '去程')], now);
   const beforeUnknown = replies.length;
@@ -174,7 +174,7 @@ test('群組成員共用列表；不同聊天室及私訊仍然隔離', async ()
   assert.equal(replies.length, beforeMissingUser);
 });
 
-test('群組所有人可查、選、搭上、没搭上與停止；知道標記實際成員並保留取消按鈕', async () => {
+test('群組所有人可查、選、没搭上與停止；知道標記實際成員並保留取消按鈕', async () => {
   const { bot, replies } = selectable();
   const alice = { type: 'group', groupId: 'shared-group', userId: 'U' + 'a'.repeat(32) };
   const bob = { ...alice, userId: 'U' + 'b'.repeat(32) };
@@ -183,9 +183,6 @@ test('群組所有人可查、選、搭上、没搭上與停止；知道標記�
   await send('query', '回程', alice);
   await click('select', replies.at(-1).message.quickReply.items[0].action.data, bob);
   assert.match(replyText(replies.at(-1)), /已選擇/);
-  const board = replies.at(-1).message.quickReply.items.find(x => x.action.label === '搭上了').action.data;
-  await click('board', board, alice);
-  assert.deepEqual(replies.at(-1).message.quickReply.items.map(x => x.action.label), ['知道', '停止追蹤']);
   await click('ack', 'ack:v1', bob);
   assert.equal(replies.at(-1).message.text, '{acknowledger} 已確認收到');
   assert.equal(replies.at(-1).message.substitution.acknowledger.mentionee.userId, bob.userId);

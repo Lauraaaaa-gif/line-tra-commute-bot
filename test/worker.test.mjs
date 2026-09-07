@@ -107,7 +107,7 @@ test('固定去回程與中文其他路線均通過 TDX 車站查找、排序、
     assert.doesNotMatch(message.text, /9000|9004|④/);
     assert.ok(s.calls.some(path => path.endsWith('/OD/' + fromId + '/to/' + toId + '/2026-08-28')));
     const selected = await s.send('1');
-    assert.ok(selected.text.includes('抵達' + to + '時間約 18:08'));
+    assert.ok(selected.text.includes('預計抵達' + to + '時間 18:08'));
   });
 });
 
@@ -130,22 +130,21 @@ test('其他路線：未知站、重複站字、同站、空班表及上游失�
   });
 });
 
-test('其他路線保留舊列表、重啟後沒搭上查原路線及搭上了；Webhook 本身不送推播', async () => {
+test('其他路線保留舊列表，重啟後沒搭上仍查原路線；搭上功能已移除', async () => {
   const s = routeWorker();
   const first = await s.send('新左營到路竹');
   const selectData = first.quickReply.items[0].action.data;
   await s.send('回程');
   s.restore();
-  assert.match((await s.send(null, selectData)).text, /抵達路竹時間約 18:08/);
+  assert.match((await s.send(null, selectData)).text, /預計抵達路竹時間 18:08/);
   s.restore();
   const missed = await s.send('沒搭上');
   assert.match(missed.text, /下一班約 18:02 從新左營出發/);
   assert.match(missed.text, /18:22 抵達路竹/);
   assert.match(s.calls.filter(path => path.includes('/OD/')).at(-1), /\/4340\/to\/9001\//);
-  s.restore();
-  const boarded = await s.send('搭上了');
-  assert.match(boarded.text, /前往路竹中/);
-  assert.match(boarded.text, /18:22 抵達路竹/);
+  const replies = s.sent.length;
+  await s.send('搭上了');
+  assert.equal(s.sent.length, replies);
   assert.equal(s.calls.filter(path => path.endsWith('/push')).length, 0);
 });
 
@@ -219,12 +218,10 @@ test('Worker 抵達時自動停止並刪除 alarm；没有即時資料不虛報�
   assert.deepEqual(s.stored.get('snapshot').tracking.records, []);
 });
 
-test('抵達當刻重啟取得新延誤後，原選車仍能搭上及停止', async () => {
+test('抵達當刻重啟取得新延誤後，原選車仍能停止', async () => {
   const s = routeWorker();
   await s.send('回程'); await s.send('1');
   s.setDelay(10); s.advance(26); s.restore(); await s.alarm();
-  const boarded = await s.send('搭上了');
-  assert.match(boarded.text, /18:18 抵達大湖/);
   await s.send('停止追蹤');
   assert.equal(s.stored.has('alarm'), false);
 });

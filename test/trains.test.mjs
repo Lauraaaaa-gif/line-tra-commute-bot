@@ -97,8 +97,8 @@ test('僅完整指令，去除首尾空白，不接受別名或模糊比對', ()
   assert.equal(parseCommand('返程'), null);
   assert.equal(parseCommand('HELP'), null);
   assert.equal(parseCommand('我已經上車了'), null);
-  assert.equal(parseCommand('已搭上'), '已搭上');
-  assert.equal(parseCommand('搭上了'), '搭上了');
+  assert.equal(parseCommand('已搭上'), null);
+  assert.equal(parseCommand('搭上了'), null);
   assert.equal(parseCommand('明天回程'), null);
   assert.equal(parseCommand(null), null);
   assert.deepEqual(textMessage('test').quickReply.items.map(x => x.action.label), ['去程', '回程', '其他路線']);
@@ -110,7 +110,7 @@ test('目的站到站時間與跨日日期，不以目的站離站時間代替',
     row.StopTimes[1].DepartureTime = '00:10';
     const [selected] = upcoming([row]);
     const text = arrivalText({ from: '新左營', to: '大湖', date: '2026-08-31' }, selected);
-    assert.match(text, /【抵達大湖時間約 2026-09-01 0:08】/);
+    assert.match(text, /【預計抵達大湖時間 2026-09-01 0:08】/);
     assert.doesNotMatch(text, /00:10/);
     assert.match(text, /已選擇區間車 2/);
   }

@@ -6,7 +6,7 @@ export function parseCommand(text) {
   if (typeof text !== 'string') return null;
   const command = text.normalize('NFKC').trim();
   if (command === '取消追蹤') return '停止追蹤';
-  return ['去程', '回程', '其他路線', '說明', '已搭上', '搭上了', '沒搭上', '停止追蹤'].includes(command) ? command : null;
+  return ['去程', '回程', '其他路線', '說明', '沒搭上', '停止追蹤'].includes(command) ? command : null;
 }
 
 // 僅接受完整格式，站名保留到 TDX 正規化，以便顯示原始輸入的錯誤站名。
@@ -101,9 +101,8 @@ export function textMessage(text, entry = null, { trip = null, stage = trip ? 's
     : { type: 'action', action: { type: 'message', label: copy.text('buttonStopTracking'), text: '停止追蹤' } };
   let buttons;
   if (stage === 'selected' && trip) buttons = [ack,
-    postback(copy.text('buttonBoarded'), `trip:board:${trip.id}`),
     postback(copy.text('buttonMissed'), `trip:miss:${trip.id}`), stop];
-  else if (stage === 'boarded' || stage === 'notification') buttons = [ack, stop];
+  else if (stage === 'notification') buttons = [ack, stop];
   else if (stage === 'missed') buttons = [ack, ...routes, stop];
   else buttons = [...(entry ? entry.result.trains.map((_, i) => postback(String(i + 1), `arrival:${entry.id}:${i + 1}`)) : []), ...routes];
   const quickReply = { items: buttons };
