@@ -158,4 +158,5 @@ Dockerfile 已提供，但未在此環境實際建置。單一實例的記憶體
 
 - 選車文案改為「於{from}上車時間  {departure}／【預計抵達{to}時間 {etaShort}】」，時間與車次仍依資料動態產生。
 - 所有「搭上了／已搭上」按鈕、postback 及完整文字指令均移除；舊按鈕也不觸發。選車後追蹤、知道、沒搭上、停止／取消追蹤保持不變。
-- 111 項測試通過，文案檢查及 Workers dry-run 打包通過。Cloudflare OAuth 尚待使用者於瀏覽器確認，本段紀錄不宣稱已部署。
+- 111 項測試通過，文案檢查及 Workers dry-run 打包通過。
+- 已部署 Cloudflare Worker 版本：2cbfac27-0a6e-43c4-8e32-0e2cb97c83e9；部署後 `/health` 回應 HTTP 200，`ok=true`。Secrets 未寫入程式庫且未變更。
